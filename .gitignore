@@ -1,0 +1,20 @@
+# ── 你个人的东西：永远不进 Git ───────────────────────────
+# 注意：本文件里注释必须单独占一行（行尾注释会被当成文件名，不生效）
+.env
+vocab.json
+vocab_seed.py
+hr_sources.py
+roster/
+references/人名职责索引.local.md
+records/
+logs/
+*.db
+
+# ── 运行环境与噪声 ──────────────────────────────────────
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.DS_Store
+._*
+*.log

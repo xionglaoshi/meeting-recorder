@@ -1,0 +1,1334 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>会议记录员</title>
+<style>
+  :root {
+    --bg: #f7f8fa;
+    --card: #ffffff;
+    --text: #1f2328;
+    --muted: #656d76;
+    --faint: #9aa0a6;
+    --border: #e4e7eb;
+    --accent: #2563eb;
+    --accent-soft: #eff4ff;
+    --red: #e5534b;
+    --red-soft: #fdf0ef;
+    --amber: #d29922;
+    --amber-soft: #fbf3e3;
+    --green: #2da44e;
+    --green-soft: #eaf7ee;
+    --radius: 12px;
+    --shadow: 0 1px 3px rgba(31,35,40,.06), 0 4px 16px rgba(31,35,40,.06);
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body {
+    font-family: -apple-system, 'PingFang SC', 'Noto Sans SC', 'Microsoft YaHei', sans-serif;
+    background: var(--bg); color: var(--text);
+    font-size: 14px; line-height: 1.6;
+    min-height: 100vh;
+  }
+  .app { max-width: 820px; margin: 0 auto; padding: 18px 16px 48px; }
+
+  /* ── 1. 标题及状态 ─────────────────────── */
+  .topbar { display:flex; align-items:center; gap:10px; margin-bottom:16px; }
+  .logo {
+    width:30px; height:30px; border-radius:8px; flex-shrink:0;
+    background: #3b82f6;
+    display:grid; place-items:center; color:#fff;
+  }
+  .logo svg { width:18px; height:18px; }
+  .topbar h1 { font-size:18px; font-weight:700; flex:1; }
+
+  /* 状态指示（五种状态 + 呼吸灯） */
+  .status {
+    display:flex; align-items:center; gap:8px;
+    font-size:13px; font-weight:600; padding:5px 14px;
+    border-radius:20px; background:var(--card);
+    border:1px solid var(--border); transition:color .2s;
+  }
+  .status .breath { width:8px; height:8px; border-radius:50%; background:currentColor; }
+  .status .timer { font-variant-numeric:tabular-nums; font-weight:700; }
+
+  /* 五种状态配色 */
+  .status.st-idle { color:var(--faint); }
+  .status.st-recording { color:#b91c1c; }            /* 暗红 */
+  .status.st-recording .breath { animation: breath-slow 2s ease-in-out infinite; }
+  .status.st-processing { color:#1d4ed8; }            /* 深蓝 */
+  .status.st-processing .breath { animation: breath-slow 2s ease-in-out infinite; }
+  .status.st-delivered { color:#15803d; }             /* 暗绿 */
+  .status.st-delivered .breath { animation: breath-slow 2s ease-in-out infinite; }
+  .status.st-error { color:#dc2626; }                 /* 亮红 */
+  .status.st-error .breath { animation: breath-fast .7s ease-in-out infinite; background:#f59e0b; }
+
+  @keyframes breath-slow { 0%,100% { opacity:1; } 50% { opacity:.25; } }
+  @keyframes breath-fast { 0%,100% { opacity:1; } 50% { opacity:.1; } }
+
+  /* ── 2. 功能按钮 ─────────────────────── */
+  .btn-card {
+    background:var(--card); border:1px solid var(--border); border-radius:var(--radius);
+    padding:14px; margin-bottom:14px; box-shadow:var(--shadow);
+  }
+  .control-row { display:flex; gap:10px; align-items:center; }
+  .btn {
+    border:none; border-radius:9px; padding:10px 20px; font-size:14px;
+    font-weight:600; cursor:pointer; font-family:inherit; transition:all .15s;
+  }
+  .btn:disabled { opacity:.5; cursor:not-allowed; }
+  .btn-start { background:var(--accent); color:#fff; }
+  .btn-start:hover:not(:disabled) { background:#1d4ed8; }
+  .btn-pause { background:var(--amber); color:#fff; }
+  .btn-pause:hover:not(:disabled) { background:#b45309; }
+  .btn-stop { background:var(--red); color:#fff; }
+  .btn-stop:hover:not(:disabled) { background:#b91c1c; }
+  .btn-mat {
+    background:var(--card); border:1px solid var(--border); border-radius:8px;
+    padding:8px 12px; font-size:12.5px; color:var(--accent); font-weight:600; cursor:pointer;
+  }
+  .btn-mat:hover { background:var(--accent-soft); }
+
+  /* ── 3. 会议信息（折叠）────────────── */
+  .fold-card {
+    background:var(--card); border:1px solid var(--border); border-radius:var(--radius);
+    margin-bottom:14px; box-shadow:var(--shadow); overflow:hidden;
+  }
+  .fold-head {
+    padding:12px 16px; cursor:pointer; user-select:none;
+    font-weight:600; font-size:14px; display:flex; align-items:center; gap:8px;
+  }
+  .fold-head .arrow { margin-left:auto; color:var(--faint); transition:transform .2s; }
+  .fold-card.open .fold-head .arrow { transform:rotate(90deg); }
+  .fold-body { padding:0 16px 14px; display:none; }
+  .fold-card.open .fold-body { display:block; }
+
+  .meta-row { margin-bottom:10px; }
+  .meta-label { display:block; font-size:12px; color:var(--muted); font-weight:600; margin-bottom:3px; }
+  .meta-row input {
+    width:100%; border:1px solid var(--border); border-radius:8px;
+    padding:8px 10px; font-size:13px; font-family:inherit;
+  }
+  .meta-row input:focus { border-color:var(--accent); outline:none; }
+  .meta-tip { font-size:11px; color:var(--faint); margin-top:3px; }
+  .mat-row { display:flex; gap:6px; }
+  .mat-row input { flex:1; min-width:0; }
+  .info-saved { font-size:12px; color:var(--green); margin-left:8px; }
+
+  /* ── 4. 实时转写 ─────────────────────── */
+  .transcript-title {
+    display:flex; align-items:center; gap:10px;
+    font-size:13px; font-weight:600; color:var(--text); padding:8px 10px 4px;
+  }
+  .search-box { margin-left:auto; display:flex; align-items:center; gap:6px; }
+  .search-box input {
+    width:190px; border:1px solid var(--border); border-radius:8px;
+    padding:5px 26px 5px 10px; font-size:12.5px; font-family:inherit;
+    transition:border-color .15s, width .2s;
+  }
+  .search-box input:focus { border-color:var(--accent); outline:none; width:240px; }
+  .search-box input.has-value { border-color:var(--accent); background:var(--accent-soft); }
+  .search-box .search-clear {
+    position:relative; margin-left:-30px; border:none; background:transparent;
+    color:var(--faint); font-size:12px; cursor:pointer; padding:2px 4px; display:none;
+  }
+  .search-box .search-clear.show { display:inline-block; }
+  .search-box .search-clear:hover { color:var(--red); }
+  .transcript-card {
+    background:var(--card); border:1px solid var(--border); border-radius:var(--radius);
+    margin-bottom:14px; box-shadow:var(--shadow); overflow:hidden;
+  }
+  /* 会议实时转录：可折叠（点击标题栏） */
+  .transcript-card .transcript-title { cursor:pointer; user-select:none; }
+  .transcript-card .transcript-title .arrow { color:var(--faint); transition:transform .2s; font-size:12px; }
+  .transcript-card.open .transcript-title .arrow { transform:rotate(90deg); }
+  .transcript-card:not(.open) .sents { display:none; }
+  .sents .body mark.hl, .sents mark.hl {
+    background:#ffe58f; color:#7c4a03; border-radius:2px; padding:0 1px;
+    font-weight:600;
+  }
+  .sents { max-height: 48vh; overflow-y:auto; padding:10px 14px; }
+  .sent {
+    display:flex; align-items:flex-start; gap:10px;
+    padding:6px 4px; border-bottom:1px solid #f0f2f5;
+  }
+  .sent:last-child { border-bottom:none; }
+  .sent .time { flex-shrink:0; font-size:12px; color:var(--faint); padding-top:2px; font-variant-numeric:tabular-nums; }
+  .sent.marker { background:#fff8e1; border-left:3px solid #f59e0b; margin:6px 0; border-radius:6px; }
+  .sent.marker .time { color:#b45309; font-weight:600; }
+  .sent.partial { border-left:3px solid #93c5fd; background:#f0f7ff; border-radius:6px; }
+  .sent.partial .time { color:#3b82f6; }
+  .sent.partial .partial-text { color:#4b5563; font-style:italic; }
+  .partial-caret { display:inline-block; width:2px; height:1em; background:#3b82f6; margin-left:2px; vertical-align:-2px; animation:caretBlink 1s step-end infinite; }
+  @keyframes caretBlink { 0%,100%{opacity:1} 50%{opacity:0} }
+  .sent.marker .marker-text { color:#92400e; font-weight:600; font-size:12.5px; }
+  .sent .body { flex:1; color:var(--text); }
+  .empty { padding:40px 16px; text-align:center; color:var(--faint); font-size:13px; }
+  .empty .big { font-size:34px; margin-bottom:8px; }
+
+  /* 说话人标签（8 色板） */
+  .spk-tag {
+    display:inline-block; padding:1px 8px; border-radius:10px;
+    font-size:11px; font-weight:600; color:#fff; margin-right:6px;
+    vertical-align:1px; white-space:nowrap; flex-shrink:0;
+  }
+  .spk-0{background:#3b5bdb}.spk-1{background:#7048e8}.spk-2{background:#1098ad}
+  .spk-3{background:#ae3ec9}.spk-4{background:#1c7ed6}.spk-5{background:#5f3dc4}
+  .spk-6{background:#0c8599}.spk-7{background:#862e9c}
+
+  /* ── 5. 常用工具（折叠）────────────── */
+  .tool-body { padding:0 16px 16px; display:none; }
+  .fold-card.open .tool-body { display:block; }
+  .tool-body textarea {
+    width:100%; border:1px solid var(--border); border-radius:8px;
+    padding:8px 10px; font-size:13px; font-family:inherit; resize:vertical;
+  }
+  .tool-body textarea:focus { border-color:var(--accent); outline:none; }
+
+  /* 附属工具（历史会议管理下方，未来可扩展） */
+  .sub-tool {
+    border:1px solid var(--border); border-radius:10px; padding:12px 14px; margin-top:10px;
+    background:#fafbfc;
+  }
+  .sub-tool:first-child { margin-top:0; }
+  .sub-tool-head { font-size:13px; font-weight:700; color:var(--text); margin-bottom:10px; }
+  .sub-tool .meta-row { margin-bottom:8px; }
+
+  /* 纪要补充信息（对话框式） */
+  .notes-list {
+    max-height: 220px; overflow-y:auto; margin:4px 0 10px;
+    border:1px solid var(--border); border-radius:9px; background:#fafbfc;
+  }
+  .notes-list .empty { padding:18px 12px; text-align:center; color:var(--faint); font-size:12.5px; }
+  .note-item {
+    display:flex; align-items:flex-start; gap:8px; padding:7px 12px;
+    border-bottom:1px solid #f0f2f5; font-size:12.8px; line-height:1.55;
+  }
+  .note-item:last-child { border-bottom:none; }
+  .note-item .nts { flex-shrink:0; font-size:11px; color:var(--faint); font-variant-numeric:tabular-nums; padding-top:1px; }
+  .note-item .nbody { flex:1; color:var(--text); word-break:break-word; }
+  .note-item .ndel {
+    flex-shrink:0; border:none; background:transparent; color:var(--faint);
+    cursor:pointer; font-size:12px; padding:0 2px; line-height:1.4;
+  }
+  .note-item .ndel:hover { color:var(--red); }
+  .note-item .nedit:hover { color:var(--accent); }
+  .note-item.editing { background:var(--accent-soft); border-radius:8px; margin:2px -4px; padding:6px 12px; }
+  .note-item .note-edit {
+    flex:1; min-width:0; border:1px solid var(--border); border-radius:6px;
+    padding:5px 8px; font-size:12.8px; font-family:inherit;
+  }
+  .note-item .note-edit:focus { border-color:var(--accent); outline:none; }
+
+  /* 历史会议 */
+  .task-row {
+    display:flex; align-items:center; gap:10px; padding:10px 14px;
+    background:var(--card); border:1px solid var(--border); border-radius:9px;
+    margin-bottom:8px; cursor:pointer; transition:border-color .15s;
+  }
+  .task-row:hover { border-color:var(--accent); }
+  .task-row .dir { font-weight:600; color:var(--accent); font-size:13px; font-variant-numeric:tabular-nums; }
+  .task-row .files { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--muted); font-size:12px; }
+  .task-row .act { flex-shrink:0; display:flex; gap:6px; }
+  .task-row .act button {
+    border:1px solid var(--border); background:#fafbfc; color:var(--text);
+    border-radius:6px; padding:3px 9px; font-size:12px; cursor:pointer; font-family:inherit;
+  }
+  .task-row .act button:hover { border-color:var(--accent); color:var(--accent); }
+
+  /* 历史详情（Tab + 音频播放器） */
+  .task-detail {
+    background:var(--card); border:1px solid var(--border);
+    border-radius:0 0 9px 9px; margin-top:-9px; margin-bottom:8px;
+    padding:14px 16px; display:none;
+  }
+  .task-detail.show { display:block; }
+  .detail-tabs { display:flex; gap:4px; border-bottom:1px solid var(--border); margin-bottom:12px; }
+  .detail-tab {
+    padding:7px 16px; font-size:13px; cursor:pointer; color:var(--muted);
+    border-bottom:2px solid transparent; font-weight:500; user-select:none;
+  }
+  .detail-tab.active { color:var(--accent); border-bottom-color:var(--accent); font-weight:600; }
+  .detail-pane { display:none; max-height:380px; overflow-y:auto; }
+  .detail-pane.active { display:block; }
+  .detail-pane .sent { padding:5px 0; }
+  .detail-pane pre { font-family:inherit; font-size:13px; white-space:pre-wrap; word-break:break-word; }
+  .detail-pane .minutes-body { font-size:13.5px; line-height:1.8; }
+  .detail-pane .minutes-body h1,.detail-pane .minutes-body h2,.detail-pane .minutes-body h3 { margin:10px 0 6px; }
+  .detail-pane .minutes-body table { border-collapse:collapse; width:100%; margin:8px 0; }
+  .detail-pane .minutes-body th,.detail-pane .minutes-body td { border:1px solid var(--border); padding:4px 8px; font-size:12.5px; }
+
+  /* 提示条 */
+  .notice { padding:9px 14px; border-radius:9px; font-size:13px; margin-bottom:12px; display:none; }
+  .notice.show { display:block; }
+  .notice.error { background:var(--red-soft); color:var(--red); }
+  .notice.ok { background:var(--green-soft); color:var(--green); }
+
+  /* 模态 */
+  .modal-mask {
+    position:fixed; inset:0; background:rgba(0,0,0,.4); z-index:100;
+    display:none; align-items:center; justify-content:center; padding:24px;
+  }
+  .modal-mask.show { display:flex; }
+  .modal {
+    background:#fff; border-radius:14px; width:100%; max-width:1400px;
+    width:95vw; max-height:94vh; height:92vh;
+    display:flex; flex-direction:column; box-shadow:0 12px 48px rgba(0,0,0,.2); overflow:hidden;
+  }
+  .modal-head { display:flex; align-items:center; gap:10px; padding:12px 16px; border-bottom:1px solid var(--border); }
+  .modal-head .t { flex:1; font-weight:600; font-size:14px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .modal-head button { border:1px solid var(--border); background:#fafbfc; border-radius:6px; padding:4px 12px; cursor:pointer; font-size:12px; }
+  .modal-body { flex:1; min-height:0; }
+  .modal-body iframe { width:100%; height:100%; border:none; }
+
+  .server-state { margin-top:10px; font-size:12.5px; color:var(--amber); background:#fff8e1; border:1px solid #fde68a; border-radius:8px; padding:8px 12px; line-height:1.6; }
+  .server-state code, .start-hint code { background:#f1f5f9; padding:1px 6px; border-radius:4px; font-size:12px; }
+  .start-hint { margin-top:10px; font-size:12.5px; color:#92400e; background:#fff8e1; border:1px solid #fde68a; border-radius:8px; padding:8px 12px; line-height:1.6; }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- 1. 标题及状态 -->
+  <div class="topbar">
+    <div class="logo">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <rect x="9" y="2" width="6" height="12" rx="3"></rect>
+        <path d="M5 10a7 7 0 0 0 14 0"></path>
+        <path d="M12 17v4"></path>
+        <path d="M8 21h8"></path>
+      </svg>
+    </div>
+    <h1>会议记录员</h1>
+    <div class="status st-idle" id="status">
+      <span class="breath"></span>
+      <span id="statusText">空闲</span>
+      <span class="timer" id="statusTimer" style="display:none"></span>
+    </div>
+  </div>
+
+  <div class="notice" id="notice"></div>
+
+  <!-- 2. 功能按钮 -->
+  <div class="btn-card">
+    <div class="control-row">
+      <button class="btn btn-start" id="btnStart">▶ 开始</button>
+      <button class="btn btn-pause" id="btnPause" style="display:none">⏸ 暂停</button>
+      <button class="btn btn-start" id="btnResume" style="display:none">▶ 恢复</button>
+      <button class="btn btn-stop" id="btnStop" style="display:none">⏹ 结束会议</button>
+      <div class="mic-row" style="margin-left:auto">
+        <select id="micSelect" style="border:1px solid var(--border);border-radius:8px;padding:7px 8px;font-size:12.5px;font-family:inherit">
+          <option value="MacBook Air麦克风">MacBook Air麦克风（默认）</option>
+          <option value="iPhone 麦克风">iPhone 麦克风（可选）</option>
+        </select>
+        <button class="btn btn-mat" id="btnSwitchMic" title="切换录音设备（会议中也可用）">🔄 切换</button>
+      </div>
+    </div>
+    <div id="iphoneHintWrap" style="display:none;margin-top:8px"></div>
+    <div class="server-state" id="serverState" style="display:none"></div>
+    <div class="start-hint" id="startHint" style="display:none"></div>
+  </div>
+
+  <!-- 3. 实时转写 -->
+  <div class="transcript-card open" id="transcriptCard">
+    <div class="transcript-title" onclick="toggleFold('transcriptCard')">
+      <span>📝 会议实时转录</span>
+      <div class="search-box" onclick="event.stopPropagation()">
+        <input id="sentSearch" type="text" placeholder="🔍 搜索流水（高亮命中）" autocomplete="off">
+        <button class="search-clear" id="sentSearchClear" title="关闭搜索">✕</button>
+      </div>
+      <span class="arrow">▸</span>
+    </div>
+    <div class="sents" id="sentList">
+      <div class="empty"><div class="big">🎧</div>点击「开始会议」进入实时转写</div>
+    </div>
+  </div>
+
+  <!-- 4. 会议信息（折叠） -->
+  <div class="fold-card" id="infoCard">
+    <div class="fold-head" onclick="toggleFold('infoCard')">📋 会议信息 <span class="arrow">▸</span></div>
+    <div class="fold-body">
+      <div class="meta-row"><label class="meta-label">📌 会议主题</label>
+        <input id="titleInput" placeholder="例：××公司研发周例会"></div>
+      <div class="meta-row"><label class="meta-label">👥 参会人员</label>
+        <input id="attendeesInput" placeholder="例：张三、李四、王五（逗号分隔）"></div>
+      <div class="meta-row"><label class="meta-label">📍 会议地点</label>
+        <input id="locationInput" placeholder="例：集团三楼会议室"></div>
+      <div class="meta-row"><label class="meta-label">🎤 会议主持</label>
+        <input id="hostInput" placeholder="例：张三"></div>
+      <div class="meta-row"><label class="meta-label">📝 会议秘书</label>
+        <input id="secretaryInput" placeholder="例：李四"></div>
+      <div class="meta-row">
+        <button class="btn btn-mat" id="btnSaveInfo">💾 保存会议信息</button>
+        <span class="info-saved" id="infoSavedTip"></span>
+        <div class="meta-tip">会议开始前/中/后都可填写保存，不影响录音与转写；结束时自动采用最新值</div>
+      </div>
+      <hr style="border:none;border-top:1px solid var(--border);margin:12px 0">
+      <div class="meta-row">
+        <label class="meta-label">📎 提交会议材料（文件或目录）</label>
+        <div class="mat-row">
+          <input id="materialsInput" placeholder="路径：~/Downloads/会议材料/ 或具体文件（多个用逗号分隔）">
+          <button class="btn btn-mat" id="btnAddMats">＋ 提交材料</button>
+        </div>
+        <div class="meta-tip" id="matsSavedTip" style="margin-top:4px"></div>
+        <div class="meta-tip">可提交具体文件或整个目录（自动扫描目录内 txt/md/pdf/docx/xlsx/pptx）；开会前/中/后随时可提交，后台解析，不影响录音</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 5. 纪要补充信息（对话框式，随会议进展逐句追加） -->
+  <div class="fold-card" id="notesCard">
+    <div class="fold-head" onclick="toggleFold('notesCard')">💬 纪要补充信息 <span class="cnt" id="notesCnt"></span><span class="arrow">▸</span></div>
+    <div class="tool-body">
+      <div class="meta-tip" style="margin-bottom:6px">给会议记录做「旁白」：转录错字、专用名词/人名、需要纪要重点关注的事，随会议进展随时补充。提交一句保存一句，生成纪要时自动注入。会前/会中/会后都可提交。</div>
+      <div class="notes-list" id="notesList"><div class="empty">暂无补充信息</div></div>
+      <div class="mat-row">
+        <input id="noteInput" placeholder="例：刚才提到的'××集团'全称是'××集团有限公司'；重点：下周三前要出方案…">
+        <button class="btn btn-mat" id="btnAddNote">＋ 补充</button>
+      </div>
+      <div class="meta-tip">支持 <code>Enter</code> 快捷提交；每条可单独删除</div>
+    </div>
+  </div>
+
+  <!-- 6. 历史会议管理 -->
+  <div class="fold-card" id="toolHistory">
+    <div class="fold-head" onclick="toggleFold('toolHistory')">📁 历史会议管理 <span class="cnt" id="taskCnt"></span><span class="arrow">▸</span></div>
+    <div class="tool-body">
+      <div class="meta-tip" style="margin-bottom:8px">成功任务可看流水记录/正式纪要；出错任务（暗红标签）可「继续」记录或「归档」</div>
+      <div id="taskList"><div class="empty">暂无历史记录</div></div>
+    </div>
+  </div>
+
+  <!-- 7. 附属工具（历史会议管理下方；未来其他工具追加 sub-tool 块） -->
+  <div class="fold-card" id="toolTools">
+    <div class="fold-head" onclick="toggleFold('toolTools')">🧰 附属工具 <span class="arrow">▸</span></div>
+    <div class="tool-body">
+      <div class="sub-tool">
+        <div class="sub-tool-head">📝 重写会议纪要</div>
+        <div class="meta-row">
+          <label class="meta-label">📄 外部稿件路径（必填，.txt/.docx/.md）</label>
+          <input id="importFile" placeholder="例：~/Downloads/会议转写.txt">
+        </div>
+        <div class="meta-row">
+          <label class="meta-label">📝 补充信息（可选，写入纪要要求/自定义信息）</label>
+          <textarea id="importExtra" rows="3" placeholder="例：补充以下会议信息：本次是研发部周例会，参会人张三、李四，地点三楼会议室……（LLM 会理解并用于纪要编写）"></textarea>
+        </div>
+        <div style="margin-top:6px;display:flex;align-items:center;gap:8px">
+          <button class="btn btn-start" id="btnImport" style="padding:8px 16px">⚙️ 生成正式纪要</button>
+          <span class="meta-tip">读取路径文件 → 纠错 → 实体核验 → 结合补充信息 → 正式纪要 → 归档双库</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- 预览模态 -->
+<div class="modal-mask" id="modalMask">
+  <div class="modal">
+    <div class="modal-head">
+      <span class="t" id="modalTitle">预览</span>
+      <button onclick="closeModal()">✕ 关闭</button>
+    </div>
+    <div class="modal-body"><iframe id="modalFrame"></iframe></div>
+  </div>
+</div>
+
+<script>
+const API = '/api'
+let state = { state: 'idle', sentence_count: 0, duration_sec: 0, last_delivery: null, last_error: '' }
+let sents = []
+let partialText = ''   // qwen-audio 实时增量（"正在说"的内容）
+let lastJobFinished = null   // 后台任务（stop/regen）完成时间戳，用于只提示一次
+const SPK_COLORS = ['#2563eb', '#7c3aed', '#059669', '#d97706', '#dc2626', '#0891b2']
+
+function $(id) { return document.getElementById(id) }
+
+// X分X秒（状态计时器）
+function fmtTimer(s) {
+  s = Math.max(0, Math.floor(s || 0))
+  const m = Math.floor(s / 60), sec = s % 60
+  return m + '分' + sec + '秒'
+}
+
+function notice(msg, kind) {
+  const el = $('notice')
+  el.textContent = msg
+  el.className = 'notice show ' + (kind || 'ok')
+  setTimeout(() => el.classList.remove('show'), 4000)
+}
+
+// ── 五种状态指示（基于后端真实状态）────────
+// 空闲 idle | 记录中 recording | 整理中 processing | 已交付 idle+last_delivery | 错误 last_error
+function renderStatus() {
+  const status = $('status')
+  const text = $('statusText')
+  const timer = $('statusTimer')
+  // 错误优先（last_error 非空）
+  if (state.last_error && state.state !== 'recording') {
+    status.className = 'status st-error'
+    text.textContent = '⚠ 错误：' + state.last_error.slice(0, 30)
+    timer.style.display = 'none'
+    return
+  }
+  // 无声检测：录音中但设备无音频（切换后备用设备静音等）
+  if (state.state === 'recording' && state.silent_error) {
+    status.className = 'status st-error'
+    text.textContent = '⚠ ' + state.silent_error.slice(0, 24)
+    timer.style.display = 'none'
+    return
+  }
+  if (state.state === 'recording') {
+    status.className = 'status st-recording'
+    // 转写异常提示：云端 ASR 失败（可能已降级本地）/ 本地兜底（v1.0.5）
+    let recTip = ''
+    if (state.asr_error) recTip = ' · ⚠ ' + state.asr_error.slice(0, 22)
+    else if (state.speech_fallback_used) recTip = ' · 本地兜底转写'
+    text.textContent = '● 记录中' + recTip
+    timer.style.display = ''
+    timer.textContent = fmtTimer(state.duration_sec || 0)
+  } else if (state.state === 'paused') {
+    status.className = 'status st-recording'
+    text.textContent = '⏸ 已暂停'
+    timer.style.display = ''
+    timer.textContent = fmtTimer(state.duration_sec || 0)
+  } else if (state.state === 'processing') {
+    status.className = 'status st-processing'
+    // 本次会议用过本地兜底转写 → 整理中一并提示（供核对专名）
+    text.textContent = state.speech_fallback_used ? '● 纪要整理中（本地兜底转写，专名可能需核对）' : '● 纪要整理中'
+    timer.style.display = 'none'
+  } else if (state.last_delivery) {
+    // idle + 有交付记录 → 产物已交付
+    status.className = 'status st-delivered'
+    text.textContent = '✓ 产物已交付'
+    timer.style.display = ''
+    timer.textContent = ''
+  } else {
+    status.className = 'status st-idle'
+    text.textContent = '空闲'
+    timer.style.display = 'none'
+  }
+  // 按钮显隐（基于真实状态）
+  $('btnStart').style.display = state.state === 'idle' ? '' : 'none'
+  $('btnPause').style.display = state.state === 'recording' ? '' : 'none'
+  $('btnResume').style.display = state.state === 'paused' ? '' : 'none'
+  $('btnStop').style.display = (state.state === 'recording' || state.state === 'paused') ? '' : 'none'
+}
+
+// ── 折叠模块 ──────────────────────────
+function toggleFold(id) {
+  $('#' + id.replace(/[^a-zA-Z0-9]/g, '')) // noop
+  const el = $(id)
+  el.classList.toggle('open')
+}
+
+// ── 实时转写渲染 ──────────────────────
+// ── 实时转写滚动（四态：跟随/暂停/搜索锁定/恢复）────────
+let autoScroll = true        // 是否跟随最新（默认 true）
+let autoScrollTimer = null   // 恢复跟随的延迟定时器
+let searchTerm = ''          // 当前搜索关键词（非空 = 搜索模式）
+
+// 高亮命中词（转义后替换，防 XSS；大小写不敏感）
+function highlightTerm(text) {
+  if (!searchTerm) return escapeHtml(text)
+  const esc = escapeHtml(text)
+  const term = escapeHtml(searchTerm).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  if (!term) return esc
+  return esc.replace(new RegExp(`(${term})`, 'gi'), '<mark class="hl">$1</mark>')
+}
+
+function renderSents() {
+  const list = $('sentList')
+  if (!sents.length && !partialText) {
+    list.innerHTML = `<div class="empty"><div class="big">🎧</div>${state.state === 'recording' ? '录音中…开始说话后转写会显示在这里' : '点击「开始会议」进入实时转写'}</div>`
+    return
+  }
+  // 记录当前滚动位置（innerHTML 重建会重置，需要保持——除非跟随模式）
+  const prevScrollTop = list.scrollTop
+  const prevHeight = list.scrollHeight
+  list.innerHTML = sents.map((s, i) => {
+    const sp = s.speaker || ''
+    const spIdx = sp ? parseInt(sp.replace(/\D/g, '')) - 1 : -1
+    const colorIdx = spIdx >= 0 ? spIdx % 8 : (sp ? hashSpeaker(sp) % 8 : -1)
+    const spEl = sp ? `<span class="spk-tag spk-${colorIdx}">${escapeHtml(sp)}</span>` : ''
+    if (s.marker) {
+      return `<div class="sent marker"><span class="time">${s.ts}</span><div class="body marker-text">${highlightTerm(s.text)}</div></div>`
+    }
+    return `<div class="sent"><span class="time">${s.ts}</span>${spEl}<div class="body">${highlightTerm(s.text)}</div></div>`
+  }).join('')
+  // 实时增量（qwen-audio 逐字输出）→ 底部"正在说"行 + 闪烁光标
+  if (partialText && state.state === 'recording') {
+    list.innerHTML += `<div class="sent partial"><span class="time">${curClock()}</span><div class="body partial-text"><span>${highlightTerm(partialText)}</span><span class="partial-caret"></span></div></div>`
+  }
+  // 滚动策略：搜索模式 → 完全锁定当前位置（新内容照常渲染但不滚）；
+  // 跟随模式 → 滚到最新；否则保持相对位置（增量渲染体验）
+  if (searchTerm) {
+    list.scrollTop = prevScrollTop
+  } else if (autoScroll) {
+    list.scrollTop = list.scrollHeight
+  } else {
+    // 保持相对位置：新内容追加后，原位置下移的量 ≈ 新增高度
+    list.scrollTop = prevScrollTop + (list.scrollHeight - prevHeight)
+  }
+}
+
+function curClock() {
+  const d = new Date()
+  return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}:${String(d.getSeconds()).padStart(2,'0')}`
+}
+
+// 用户滚动事件：离开底部 → 暂停跟随；停 3.5s → 恢复跟随（搜索模式下不自动恢复）
+$('sentList').addEventListener('scroll', () => {
+  const list = $('sentList')
+  if (searchTerm) {
+    // 搜索模式：手动滚动不触发任何自动恢复，保持锁定
+    if (autoScrollTimer) { clearTimeout(autoScrollTimer); autoScrollTimer = null }
+    autoScroll = false
+    return
+  }
+  const nearBottom = list.scrollHeight - list.scrollTop - list.clientHeight < 80
+  if (nearBottom) {
+    // 回到底部 → 立即恢复跟随
+    autoScroll = true
+    if (autoScrollTimer) { clearTimeout(autoScrollTimer); autoScrollTimer = null }
+  } else {
+    // 上翻离开底部 → 暂停跟随，记 3.5s 后自动恢复
+    autoScroll = false
+    if (autoScrollTimer) clearTimeout(autoScrollTimer)
+    autoScrollTimer = setTimeout(() => {
+      autoScroll = true
+      const l = $('sentList')
+      if (l) l.scrollTop = l.scrollHeight
+    }, 3500)
+  }
+})
+
+// ── 流水搜索框（搜索时锁定滚动 + 高亮命中；关闭后恢复自动跟随）──
+const sentSearchEl = $('sentSearch')
+const sentSearchClear = $('sentSearchClear')
+
+function applySearch() {
+  const q = sentSearchEl.value.trim()
+  const wasSearching = !!searchTerm
+  searchTerm = q
+  if (q) {
+    // 进入/保持搜索模式：锁定滚动，禁止 3.5s 自动恢复
+    autoScroll = false
+    if (autoScrollTimer) { clearTimeout(autoScrollTimer); autoScrollTimer = null }
+    sentSearchEl.classList.add('has-value')
+    sentSearchClear.classList.add('show')
+    if (!wasSearching) {
+      // 首次进入搜索：保留当前视口位置（不跳）
+    }
+  } else {
+    // 关闭搜索 → 恢复自动跟随
+    searchTerm = ''
+    sentSearchEl.classList.remove('has-value')
+    sentSearchClear.classList.remove('show')
+    autoScroll = true
+    const l = $('sentList')
+    if (l) l.scrollTop = l.scrollHeight
+  }
+  renderSents()
+}
+
+sentSearchEl.addEventListener('input', applySearch)
+sentSearchEl.addEventListener('keydown', e => {
+  if (e.key === 'Escape') { sentSearchEl.value = ''; applySearch(); sentSearchEl.blur() }
+})
+sentSearchClear.addEventListener('click', () => {
+  sentSearchEl.value = ''
+  applySearch()
+  sentSearchEl.focus()
+})
+
+function hashSpeaker(name) {
+  let h = 0
+  for (const c of String(name)) h = (h * 31 + c.charCodeAt(0)) % 997
+  return h
+}
+
+function escapeHtml(s) {
+  return String(s ?? '').replace(/[&<>"']/g, c => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+  })[c])
+}
+function escapeAttr(s) { return String(s).replace(/"/g, '&quot;') }
+
+// ── 轮询状态 ─────────────────────────
+async function poll() {
+  try {
+    const r = await fetch(API + '/state')
+    const d = await r.json()
+    state = { ...state, ...d }
+    renderStatus()
+    // 后台任务（2026-09-13 起 stop/regen 异步）：完成时提示一次并刷新历史列表
+    const job = d.job
+    if (job && job.finished_at && job.finished_at !== lastJobFinished) {
+      lastJobFinished = job.finished_at
+      if (job.ok) {
+        notice(job.kind === 'stop' ? '✓ 纪要已生成，产物已交付！' : '✓ 纪要已重新生成！')
+        pollTasks()
+      } else {
+        notice('整理失败：' + (job.error || '未知错误'), 'error')
+      }
+    }
+  } catch (e) { /* 静默 */ }
+  try {
+    const r = await fetch(API + '/sentences')
+    const d = await r.json()
+    sents = d.sentences || []
+    partialText = d.partial || ''
+    renderSents()
+  } catch (e) { /* 静默 */ }
+}
+
+// ── 控制：开始 / 暂停 / 恢复 / 结束 ─────────
+$('btnStart').onclick = async () => {
+  if ($('btnStart').disabled) return   // R5: 防重复点击
+  const mats = parseMaterialPaths()
+  try {
+    $('btnStart').disabled = true
+    $('btnStart').textContent = '⏳ 启动中…'
+    const r = await fetch(API + '/start', { method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ device: $('micSelect').value || '', materials: mats }) })
+    if (!r.ok) { const d = await r.json().catch(()=>({})); throw new Error(d.detail || '开始失败') }
+    // R4: 状态回读校验——确认后端真的进入 recording
+    const st = await fetch(API + '/state').then(x => x.json()).catch(() => null)
+    if (!st || st.state !== 'recording') {
+      notice('⚠ 开始请求已发送，但后端未确认录音（实际状态：' + (st?.state || '未知') + '），请检查', 'error')
+    } else {
+      sents = []
+      renderSents()
+      notice('会议开始，正在录音与转写 ✓')
+    }
+  } catch (e) { notice(e.message, 'error') }
+  finally { $('btnStart').disabled = false; $('btnStart').textContent = '▶ 开始' }
+}
+
+$('btnPause').onclick = async () => {
+  if ($('btnPause').disabled) return
+  try {
+    $('btnPause').disabled = true
+    const r = await fetch(API + '/pause', { method: 'POST', headers: {'Content-Type':'application/json'}, body: '{}' })
+    if (!r.ok) { const d = await r.json().catch(()=>({})); throw new Error(d.detail || '暂停失败') }
+    // R4: 回读确认
+    const st = await fetch(API + '/state').then(x => x.json()).catch(() => null)
+    if (st && st.state === 'paused') notice('已暂停录音与转写 ✓')
+    else notice('⚠ 暂停请求已发送，但后端状态未确认（' + (st?.state || '未知') + '）', 'error')
+  } catch (e) { notice(e.message, 'error') }
+  finally { $('btnPause').disabled = false }
+}
+
+$('btnResume').onclick = async () => {
+  if ($('btnResume').disabled) return
+  try {
+    $('btnResume').disabled = true
+    const r = await fetch(API + '/resume', { method: 'POST', headers: {'Content-Type':'application/json'}, body: '{}' })
+    if (!r.ok) { const d = await r.json().catch(()=>({})); throw new Error(d.detail || '恢复失败') }
+    // R4: 回读确认
+    const st = await fetch(API + '/state').then(x => x.json()).catch(() => null)
+    if (st && st.state === 'recording') notice('已恢复录音与转写 ✓')
+    else notice('⚠ 恢复请求已发送，但后端状态未确认（' + (st?.state || '未知') + '）', 'error')
+  } catch (e) { notice(e.message, 'error') }
+  finally { $('btnResume').disabled = false }
+}
+
+$('btnStop').onclick = async () => {
+  if (!confirm('结束会议？将自动整理流水、生成正式纪要并交付（Obsidian + WIKI）。')) return
+  const title = $('titleInput').value.trim()
+  const attendees = $('attendeesInput').value.trim()
+  const location = $('locationInput').value.trim()
+  // 立即反馈：按钮禁用 + 状态切到"整理中"
+  $('btnStop').disabled = true
+  $('btnStop').textContent = '⏳ 整理中…'
+  try {
+    const r = await fetch(API + '/stop', { method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ title, attendees, location }) })
+    if (!r.ok) { const d = await r.json().catch(()=>({})); throw new Error(d.detail || '结束失败') }
+    const d = await r.json()
+    if (d.async) {
+      // 异步收尾：后台跑"校对→核验→纪要→归档"，完成时由 poll() 提示
+      notice('✓ 已结束录音，正在后台整理纪要…（页面可继续用，完成后自动提示）')
+    } else {
+      notice('✓ 会议已结束，产物已交付！')
+    }
+    poll()
+    pollTasks()
+  } catch (e) {
+    notice(e.message, 'error')
+  } finally {
+    $('btnStop').disabled = false
+    $('btnStop').textContent = '⏹ 结束会议'
+  }
+}
+
+// ── 会议信息保存（真实提交后端）────────
+$('btnSaveInfo').onclick = async () => {
+  try {
+    const r = await fetch(API + '/info', { method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({
+        title: $('titleInput').value.trim(),
+        attendees: $('attendeesInput').value.trim(),
+        location: $('locationInput').value.trim(),
+        host: $('hostInput').value.trim(),
+        secretary: $('secretaryInput').value.trim()
+      }) })
+    if (!r.ok) throw new Error('保存失败')
+    const d = await r.json()
+    $('infoSavedTip').textContent = '✅ 会议信息已成功提交 ' + new Date().toLocaleTimeString('zh-CN', {hour:'2-digit',minute:'2-digit'})
+    $('infoSavedTip').style.color = 'var(--green)'
+    notice('✅ 会议信息已成功提交')
+  } catch (e) { notice(e.message, 'error') }
+}
+
+async function loadSavedInfo() {
+  try {
+    const r = await fetch(API + '/info')
+    const d = await r.json()
+    if (!d.ok) return
+    const info = d.info || {}
+    if (info.title) $('titleInput').value = info.title
+    if (info.attendees) $('attendeesInput').value = info.attendees
+    if (info.location) $('locationInput').value = info.location
+    if (info.host) $('hostInput').value = info.host
+    if (info.secretary) $('secretaryInput').value = info.secretary
+  } catch (e) { /* 静默 */ }
+}
+
+// ── 材料提交（任意时刻，旁路）────────
+function parseMaterialPaths() {
+  const raw = $('materialsInput').value.trim()
+  if (!raw) return []
+  return raw.split(/[,，;；\n]/).map(s => {
+    let p = s.trim()
+    return p
+  }).filter(Boolean)
+}
+
+$('btnAddMats').onclick = async () => {
+  const mats = parseMaterialPaths()
+  if (!mats.length) { notice('请输入材料路径', 'error'); return }
+  try {
+    const r = await fetch(API + '/materials', { method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ paths: mats }) })
+    if (!r.ok) { const d = await r.json().catch(()=>({})); throw new Error(d.detail || '提交失败') }
+    const d = await r.json()
+    // 成功提示（输入框保留，旁显示状态）
+    notice(d.added ? `✅ 会议材料已成功提交（${d.added} 份），后台解析中` : (d.msg || '材料已存在'))
+    const tip = $('matsSavedTip')
+    tip.textContent = '✅ 已提交 ' + new Date().toLocaleTimeString('zh-CN', {hour:'2-digit',minute:'2-digit'}) + '：' + $('materialsInput').value
+    tip.style.color = 'var(--green)'
+    // 保留输入框内容（让用户确认提交了什么），不自动清空
+  } catch (e) { notice(e.message, 'error') }
+}
+
+// ── 纪要补充信息（对话框式）────────
+let notes = []
+let notesApiOk = true   // 后端是否支持 /api/notes（旧版本 404 → 本地暂存降级）
+const PENDING_KEY = 'meeting.pendingNotes'
+
+function loadPending() {
+  try { return JSON.parse(localStorage.getItem(PENDING_KEY) || '[]') }
+  catch (e) { return [] }
+}
+function savePending(arr) {
+  try { localStorage.setItem(PENDING_KEY, JSON.stringify(arr)) }
+  catch (e) { /* 静默 */ }
+}
+
+// 后端恢复可用时：把本地暂存推送到后端（幂等，逐条 POST）
+async function syncPending() {
+  const pend = loadPending()
+  if (!pend.length || !notesApiOk) return
+  const remain = []
+  for (const p of pend) {
+    try {
+      const r = await fetch(API + '/notes', { method: 'POST', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ text: p.text }) })
+      if (r.status === 404) { notesApiOk = false; break }   // 后端又变旧/重启中
+      if (!r.ok) { remain.push(p); continue }
+    } catch (e) { remain.push(p); break }
+  }
+  savePending(remain)
+}
+
+async function loadNotes() {
+  // 编辑态保护：轮询刷新前保存正在编辑的输入值（避免被打断）
+  let editSnap = {}
+  notes.forEach((n, i) => {
+    if (n.editing) {
+      const inp = $('noteEdit-' + i)
+      editSnap[i] = { ts: n.ts, text: (inp ? inp.value : n.text), pending: n.pending }
+    }
+  })
+  try {
+    const r = await fetch(API + '/notes')
+    if (r.status === 404) {
+      // 后端版本过旧：/api/notes 未实现 → 本地暂存降级（不丢，重启后自动同步）
+      if (notesApiOk) {
+        notesApiOk = false
+        const list = $('notesList')
+        list.innerHTML = '<div class="empty" style="color:var(--amber)">⚠ 后端为旧版本，纪要补充信息将本地暂存（刷新不丢）。结束会议重启后端后自动同步。</div>'
+      }
+      notes = loadPending()
+      restoreEditSnap(editSnap)
+      renderNotes()
+      return
+    }
+    if (!r.ok) return
+    notesApiOk = true
+    await syncPending()   // 恢复后先同步本地暂存
+    const d = await r.json()
+    const pend = loadPending()
+    // 后端 notes + 未同步成功的本地暂存（标注「待同步」）
+    notes = (d.notes || []).concat(pend.map(p => ({ ...p, pending: true })))
+    restoreEditSnap(editSnap)
+    renderNotes()
+  } catch (e) { /* 服务未启动时静默 */ }
+}
+
+// 轮询后恢复编辑态（按索引对齐：后端列表追加变化，编辑项通常仍在原索引）
+function restoreEditSnap(snap) {
+  Object.keys(snap).forEach(k => {
+    const i = parseInt(k)
+    if (i >= 0 && i < notes.length) {
+      notes[i].editing = true
+      notes[i].text = snap[k].text   // 保留输入框中的未保存值
+      notes[i].ts = snap[k].ts
+      notes[i].pending = snap[k].pending
+    }
+  })
+}
+
+function renderNotes() {
+  const list = $('notesList')
+  $('notesCnt').textContent = notes.length ? `（${notes.length}）` : ''
+  if (!notes.length) { list.innerHTML = '<div class="empty">暂无纪要补充信息</div>'; return }
+  list.innerHTML = notes.map((n, i) => {
+    // 编辑态：输入框 + 保存/取消
+    if (n.editing) {
+      return `<div class="note-item editing">
+        <span class="nts">${escapeHtml(n.ts || '')}</span>
+        <input class="note-edit" id="noteEdit-${i}" value="${escapeAttr(n.text)}" placeholder="修改内容…">
+        <button class="ndel" style="color:var(--green)" onclick="saveNoteEdit(${i})" title="保存">✓</button>
+        <button class="ndel" onclick="cancelNoteEdit(${i})" title="取消">✕</button>
+      </div>`
+    }
+    return `<div class="note-item">
+      <span class="nts">${escapeHtml(n.ts || '')}</span>
+      <span class="nbody">${escapeHtml(n.text)}${n.pending ? ' <span style="color:var(--amber);font-size:11px">(待同步)</span>' : ''}</span>
+      <button class="ndel nedit" onclick="startNoteEdit(${i})" title="修改">✎</button>
+      <button class="ndel" onclick="deleteNote(${i})" title="删除">✕</button>
+    </div>`
+  }).join('')
+}
+
+function startNoteEdit(index) {
+  if (index < 0 || index >= notes.length) return
+  notes[index].editing = true
+  renderNotes()
+  const inp = $('noteEdit-' + index)
+  if (inp) { inp.focus(); inp.select() }
+}
+
+function cancelNoteEdit(index) {
+  if (index < 0 || index >= notes.length) return
+  delete notes[index].editing
+  renderNotes()
+}
+
+async function saveNoteEdit(index) {
+  if (index < 0 || index >= notes.length) return
+  const inp = $('noteEdit-' + index)
+  const text = (inp ? inp.value : '').trim()
+  if (!text) { notice('内容不能为空', 'error'); return }
+  const n = notes[index]
+  delete n.editing
+  if (!notesApiOk) {
+    // 本地模式：直接改 localStorage
+    const pend = loadPending()
+    if (index < pend.length) {
+      pend[index].text = text
+      savePending(pend)
+    }
+    n.text = text
+    notes = loadPending()
+    renderNotes()
+    notice('✅ 已修改（本地暂存，后端重启后自动同步）')
+    return
+  }
+  // 后端模式：notes = 后端部分 + 本地待同步部分（尾部）
+  const pend = loadPending()
+  const backendLen = notes.length - pend.length
+  try {
+    if (index < backendLen) {
+      const r = await fetch(API + '/notes/update', { method: 'POST', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ index, text }) })
+      if (r.status === 404) {
+        notesApiOk = false
+        const pl = loadPending()
+        pl.push({ ts: curClock(), text })
+        savePending(pl)
+        n.text = text
+        notes = pl
+        renderNotes()
+        notice('后端为旧版本，已本地暂存（重启后自动同步）', 'error')
+        return
+      }
+      if (!r.ok) { const d = await r.json().catch(()=>({})); throw new Error(d.detail || '修改失败') }
+      notice('✅ 已修改')
+    } else {
+      // 改本地待同步项
+      const li = index - backendLen
+      if (li >= 0 && li < pend.length) {
+        pend[li].text = text
+        savePending(pend)
+      }
+      notice('✅ 已修改（本地暂存，重启后自动同步）')
+    }
+    loadNotes()
+  } catch (e) { notice(e.message, 'error') }
+}
+
+async function addNote() {
+  const text = $('noteInput').value.trim()
+  if (!text) { notice('请输入纪要补充信息', 'error'); return }
+  $('noteInput').value = ''
+  if (!notesApiOk) {
+    // 本地暂存：能看能删，重启后自动同步
+    const pend = loadPending()
+    pend.push({ ts: curClock(), text })
+    savePending(pend)
+    notes = pend
+    renderNotes()
+    notice('✅ 已本地暂存（后端重启后自动同步）')
+    return
+  }
+  try {
+    const r = await fetch(API + '/notes', { method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ text }) })
+    if (r.status === 404) {
+      notesApiOk = false
+      const pend = loadPending()
+      pend.push({ ts: curClock(), text })
+      savePending(pend)
+      notes = pend
+      renderNotes()
+      notice('后端为旧版本，已本地暂存（重启后自动同步）', 'error')
+      return
+    }
+    if (!r.ok) { const d = await r.json().catch(()=>({})); throw new Error(d.detail || '提交失败') }
+    notice('✅ 纪要补充信息已保存')
+    loadNotes()
+  } catch (e) { notice(e.message, 'error') }
+}
+
+async function deleteNote(index) {
+  if (!notesApiOk) {
+    // 本地模式：直接删 localStorage
+    const pend = loadPending()
+    if (index >= 0 && index < pend.length) {
+      pend.splice(index, 1)
+      savePending(pend)
+      notes = pend
+      renderNotes()
+    }
+    return
+  }
+  // 后端模式：notes = 后端部分 + 本地待同步部分（尾部）
+  const pend = loadPending()
+  const backendLen = notes.length - pend.length
+  try {
+    if (index < backendLen) {
+      const r = await fetch(API + '/notes/delete', { method: 'POST', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ index }) })
+      if (r.status === 404) { notesApiOk = false; notes = pend; renderNotes(); notice('后端为旧版本，已本地删除', 'error'); return }
+      if (!r.ok) { const d = await r.json().catch(()=>({})); throw new Error(d.detail || '删除失败') }
+    } else {
+      // 删本地待同步项
+      const li = index - backendLen
+      if (li >= 0 && li < pend.length) {
+        pend.splice(li, 1)
+        savePending(pend)
+      }
+    }
+    loadNotes()
+  } catch (e) { notice(e.message, 'error') }
+}
+
+$('btnAddNote').onclick = addNote
+$('noteInput').addEventListener('keydown', e => { if (e.key === 'Enter') addNote() })
+
+// ── 导入外部转写稿 ───────────────────
+$('btnImport').onclick = async () => {
+  const file = $('importFile').value.trim()   // `~` 交给后端 expanduser 展开
+  if (!file) { notice('请填写外部稿件路径', 'error'); return }
+  try {
+    $('btnImport').disabled = true
+    $('btnImport').textContent = '⏳ 生成中…'
+    const r = await fetch(API + '/import', { method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({
+        file,
+        extra: $('importExtra').value.trim()
+      }) })
+    if (!r.ok) { const d = await r.json().catch(()=>({})); throw new Error(d.detail || '导入失败') }
+    notice('正式纪要已生成并归档 ✓')
+    pollTasks()
+    $('importFile').value = ''
+    $('importExtra').value = ''
+  } catch (e) { notice(e.message, 'error') }
+  finally { $('btnImport').disabled = false; $('btnImport').textContent = '⚙️ 生成正式纪要' }
+}
+
+// ── 历史会议管理 ─────────────────────
+async function pollTasks() {
+  try {
+    const r = await fetch(API + '/tasks')
+    const d = await r.json()
+    renderTasks(d.tasks || [])
+  } catch (e) { /* 静默 */ }
+}
+
+// ── 出错任务（断点续传）────────────────
+async function pollBroken() {
+  try {
+    const r = await fetch(API + '/broken_tasks')
+    const d = await r.json()
+    renderBroken(d.tasks || [])
+  } catch (e) { /* 静默 */ }
+}
+
+function renderBroken(tasks) {
+  $('brokenCnt').textContent = tasks.length ? `（${tasks.length}）` : ''
+  const list = $('brokenList')
+  if (!tasks.length) { list.innerHTML = '<div class="empty">暂无出错任务</div>'; return }
+  list.innerHTML = tasks.map(t => `
+    <div class="task-row">
+      <span class="dir">${escapeHtml(t.dir)}</span>
+      <span class="files">${t.sentences} 句 · ${t.has_flow ? '有流水' : ''}${t.pcm_bytes ? ' · 录音' + fmtBytes(t.pcm_bytes) : ''} · ${t.modified}</span>
+      <span class="act" onclick="event.stopPropagation()">
+        <button onclick="continueBroken('${escapeAttr(t.dir)}')">▶ 继续记录</button>
+        <button onclick="recoverBroken('${escapeAttr(t.dir)}')">📄 直接归档</button>
+      </span>
+    </div>`).join('')
+}
+
+function fmtBytes(b) {
+  if (b > 1024 * 1024) return (b / 1024 / 1024).toFixed(1) + 'MB'
+  if (b > 1024) return (b / 1024).toFixed(0) + 'KB'
+  return b + 'B'
+}
+
+// 继续记录（断点续传）
+async function continueBroken(dir) {
+  if (!confirm(`继续记录任务 ${dir}？\n将保留已有流水（${'待确认'}），从当前位置追加录音。`)) return
+  try {
+    const r = await fetch(API + '/continue', { method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ dir, device: $('micSelect').value || '' }) })
+    if (!r.ok) { const d = await r.json().catch(()=>({})); throw new Error(d.detail || '续传失败') }
+    const d = await r.json()
+    notice(`✓ 已续传 ${dir}（恢复 ${d.resumed_sentences} 句已有流水），继续录音中`)
+    poll(); pollBroken()
+  } catch (e) { notice(e.message, 'error') }
+}
+
+// 直接归档（不继续录，把已有内容归档）
+async function recoverBroken(dir) {
+  if (!confirm(`把任务 ${dir} 直接归档（生成纪要并交付，不再录音）？`)) return
+  try {
+    const r = await fetch(API + '/recover', { method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ dir }) })
+    const d = await r.json()
+    if (!d.ok) throw new Error(d.detail || '归档失败')
+    notice(d.msg || '已归档 ✓')
+    pollBroken(); pollTasks()
+  } catch (e) { notice(e.message, 'error') }
+}
+
+// 删除历史会议（含 WIKI/Obsidian 同步副本）
+async function deleteTask(dir) {
+  if (!confirm(`删除会议 ${dir}？\n将同时删除 WIKI meetings/ 和 Obsidian Inbox 的同步副本，不可恢复！`)) return
+  try {
+    const r = await fetch(API + '/delete', { method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ dir }) })
+    const d = await r.json()
+    if (!d.ok) throw new Error(d.detail || '删除失败')
+    notice(`✓ 已删除 ${dir}（${d.deleted.length} 处）`)
+    pollTasks()
+  } catch (e) { notice(e.message, 'error') }
+}
+
+function renderTasks(tasks) {
+  $('taskCnt').textContent = `（${tasks.length}）`
+  const list = $('taskList')
+  if (!tasks.length) { list.innerHTML = '<div class="empty">暂无历史记录</div>'; return }
+  list.innerHTML = tasks.map(t => {
+    const failed = t.failed
+    // 状态标签（成功墨绿 / 失败暗红）
+    const tag = failed
+      ? '<span style="display:inline-block;background:#b91c1c;color:#fff;font-size:11px;padding:1px 8px;border-radius:10px;font-weight:600;flex-shrink:0">未收口</span>'
+      : '<span style="display:inline-block;background:#15803d;color:#fff;font-size:11px;padding:1px 8px;border-radius:10px;font-weight:600;flex-shrink:0">成功</span>'
+    // 显示名：有主题显示主题+目录号，无则目录号
+    const showname = t.title
+      ? `${escapeHtml(t.title)} <span style="color:#8a919c;font-size:11px">(${escapeHtml(t.dir)})</span>`
+      : escapeHtml(t.dir)
+    // 信息：失败显示句数/录音大小；成功显示产物清单
+    const info = failed
+      ? `${t.sentences || 0} 句 · ${t.pcm_bytes ? '录音' + fmtBytes(t.pcm_bytes) : ''} · ${t.modified}`
+      : (t.files || []).join(' · ')
+    // 按钮（成功：流水/纪要；失败：继续/归档；都加删除）
+    let btns = ''
+    if (failed) {
+      btns = `<button onclick="continueBroken('${escapeAttr(t.dir)}')">▶ 继续</button>
+              <button onclick="recoverBroken('${escapeAttr(t.dir)}')">📄 归档</button>`
+    } else {
+      btns = `<button onclick="openTask('${escapeAttr(t.dir)}','会议记录-清洗稿.md')">📜 流水记录</button>
+              <button onclick="openTask('${escapeAttr(t.dir)}','会议纪要.md')">📄 会议纪要</button>`
+    }
+    btns += `<button onclick="deleteTask('${escapeAttr(t.dir)}')" style="color:#dc2626">🗑 删除</button>`
+    // 成功任务可点击展开详情；失败任务点击无详情（用按钮操作）
+    const rowClick = failed ? '' : `onclick="toggleTaskDetail('${escapeAttr(t.dir)}')"`
+    return `
+    <div class="task-row" ${rowClick}>
+      ${tag}
+      <span class="dir">${showname}</span>
+      <span class="files">${info}</span>
+      <span class="act" onclick="event.stopPropagation()">${btns}</span>
+    </div>
+    ${failed ? '' : `<div class="task-detail" id="detail-${escapeAttr(t.dir)}">
+      <div class="detail-tabs">
+        <div class="detail-tab active" onclick="switchTab('${escapeAttr(t.dir)}',0)">📜 流水记录</div>
+        <div class="detail-tab" onclick="switchTab('${escapeAttr(t.dir)}',1)">📄 正式纪要</div>
+      </div>
+      <div class="detail-pane active" id="pane0-${escapeAttr(t.dir)}"><div class="empty">加载中…</div></div>
+      <div class="detail-pane" id="pane1-${escapeAttr(t.dir)}"><div class="empty">加载中…</div></div>
+    </div>`}`}).join('')
+}
+
+async function toggleTaskDetail(dir) {
+  const detail = $('detail-' + dir)
+  if (!detail) return
+  const isShow = detail.classList.contains('show')
+  document.querySelectorAll('.task-detail.show').forEach(d => d.classList.remove('show'))
+  if (isShow) return
+  detail.classList.add('show')
+  await loadDetail(dir, 0)
+  loadMinutes(dir)
+}
+
+async function loadDetail(dir, tab) {
+  const pane = $('pane' + tab + '-' + dir)
+  try {
+    const r = await fetch(API + '/flow?dir=' + encodeURIComponent(dir))
+    const d = await r.json()
+    const list = d.sentences || []
+    if (!list.length) { pane.innerHTML = '<div class="empty">无流水记录</div>'; return }
+    pane.innerHTML = '<div class="sents">' + list.map(s => {
+      const sp = s.speaker || ''
+      const colorIdx = sp ? hashSpeaker(sp) % 8 : -1
+      const spEl = sp ? `<span class="spk-tag spk-${colorIdx}">${escapeHtml(sp)}</span>` : ''
+      return `<div class="sent"><span class="time">${s.ts}</span>${spEl}<div class="body">${escapeHtml(s.text)}</div></div>`
+    }).join('') + '</div>'
+  } catch (e) { pane.innerHTML = '<div class="empty">加载失败</div>' }
+}
+
+async function loadMinutes(dir) {
+  const pane = $('pane1-' + dir)
+  try {
+    const r = await fetch(API + '/preview?dir=' + encodeURIComponent(dir) + '&file=' + encodeURIComponent('会议纪要.md'))
+    const d = await r.json()
+    // preview 返回完整 HTML 文档，提取 <body> 内内容（避免嵌套）
+    let html = d.html || ''
+    const m = html.match(/<body[^>]*>([\s\S]*)<\/body>/i)
+    if (m) html = m[1]
+    pane.innerHTML = html ? `<div class="minutes-body">${html}</div>` : '<div class="empty">暂无正式纪要</div>'
+  } catch (e) { pane.innerHTML = '<div class="empty">加载失败</div>' }
+}
+
+function switchTab(dir, idx) {
+  const detail = $('detail-' + dir)
+  detail.querySelectorAll('.detail-tab').forEach((t, i) => t.classList.toggle('active', i === idx))
+  detail.querySelectorAll('.detail-pane').forEach((p, i) => p.classList.toggle('active', i === idx))
+}
+
+// ── 模态 ────────────────────────────
+async function openTask(dir, file) {
+  try {
+    const r = await fetch(API + '/preview?dir=' + encodeURIComponent(dir) + '&file=' + encodeURIComponent(file))
+    const d = await r.json()
+    if (!d.html) { notice('预览失败', 'error'); return }
+    $('modalTitle').textContent = `${dir} · ${file}`
+    $('modalFrame').srcdoc = d.html
+    $('modalMask').classList.add('show')
+  } catch (e) { notice('预览失败', 'error') }
+}
+function closeModal() { $('modalMask').classList.remove('show') }
+$('modalMask').addEventListener('click', e => { if (e.target === $('modalMask')) closeModal() })
+
+async function loadDevices() {
+  try {
+    const r = await fetch(API + '/devices')
+    const d = await r.json()
+    const sel = $('micSelect')
+    const prev = localStorage.getItem('meeting.mic') || ''
+    const devs = d.devices || []
+    sel.innerHTML = devs.length
+      ? devs.map(v => `<option value="${v.index}">${escapeHtml(v.name)}</option>`).join('')
+      : '<option value="MacBook Air麦克风">MacBook Air麦克风（默认）</option>'
+    // 默认设备用后端动态返回的 default（MacBook 优先，索引动态）
+    const defDev = d.default || ''
+    const macIdx = devs.find(v => v.index === defDev)
+    if (prev && [...sel.options].some(o => o.value === prev)) sel.value = prev
+    else if (macIdx) sel.value = macIdx.index
+    else if (devs.length) sel.value = devs[0].index
+    localStorage.setItem('meeting.mic', sel.value)
+    // iPhone 未连接提示（放在按钮模块下方，不挤压按钮布局）
+    const hasIphone = devs.some(v => /iPhone/i.test(v.name))
+    const wrap = $('iphoneHintWrap')
+    if (!hasIphone) {
+      wrap.style.display = ''
+      wrap.innerHTML = '<div style="font-size:11.5px;color:#b45309;background:#fef3c7;border:1px solid #fde68a;border-radius:6px;padding:5px 10px;">ℹ 未检测到iPhone</div>'
+    } else {
+      wrap.style.display = 'none'
+      wrap.innerHTML = ''
+    }
+  } catch (e) { /* 静默 */ }
+}
+
+// 手动切换设备（会议中也可用，无感切换）
+$('btnSwitchMic').onclick = async () => {
+  const dev = $('micSelect').value
+  try {
+    const r = await fetch(API + '/device', { method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ device: dev }) })
+    if (!r.ok) { const d = await r.json().catch(()=>({})); throw new Error(d.detail || '切换失败') }
+    localStorage.setItem('meeting.mic', dev)
+    notice(`✓ 录音设备已切换至 ${dev}`)
+    // 切换后立即刷新设备列表（iPhone 重连等）
+    setTimeout(loadDevices, 1000)
+  } catch (e) { notice(e.message, 'error') }
+}
+$('micSelect').addEventListener('change', e => {
+  localStorage.setItem('meeting.mic', e.target.value)
+})
+
+async function serverAlive() {
+  try {
+    const r = await fetch(API + '/state')
+    if (r.ok) { $('serverState').style.display = 'none'; return true }
+  } catch (e) { /* 未启动 */ }
+  $('serverState').style.display = ''
+  $('serverState').innerHTML = '⚠ 后端服务未启动。请运行 <code>meeting-up</code>（= <code>bash ~/.agents/skills/meeting-recorder/start.sh</code>）启动后刷新页面。'
+  return false
+}
+
+// 启动
+loadDevices(); loadSavedInfo(); serverAlive(); poll(); pollTasks(); loadNotes()
+setInterval(poll, 2000)
+setInterval(pollTasks, 10000)
+setInterval(loadNotes, 10000)   // 补充信息轮询（多端同步/页面重开恢复）
+setInterval(loadDevices, 10000)   // 设备列表定时刷新（iPhone 连接/断开 10 秒内反映）
+</script>
+</body>
+</html>

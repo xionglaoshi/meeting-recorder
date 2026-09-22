@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleIdentifier</key>
+	<string>local.hermes.meeting-recorder.asr-macos</string>
+	<key>CFBundleName</key>
+	<string>asr-macos</string>
+	<key>CFBundleVersion</key>
+	<string>1.0</string>
+	<key>CFBundleShortVersionString</key>
+	<string>1.0</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Hermes 会议记录员在 qwen 转写不可用时，使用 macOS 语音识别离线兜底转写会议录音。</string>
+</dict>
+</plist>

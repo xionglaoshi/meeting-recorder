@@ -1,0 +1,29 @@
+# meeting-server 运行依赖
+#
+# 说明：版本为实测可用的组合（Python 3.11）。你的平台若装不上个别版本，
+#       可以先放宽为 >= 再试；核心只有前 7 个，后 6 个用于纪要渲染与热词。
+#
+# 安装：
+#   bash setup.sh                                  # 一键（推荐）
+#   python3 -m pip install -r requirements.txt     # 装进当前环境
+
+# ── 服务框架 ──
+fastapi==0.141.1
+uvicorn==0.52.4
+pydantic==2.13.5
+
+# ── 语音识别 / 热词（阿里百炼 DashScope）──
+dashscope==1.27.5
+websocket-client==1.9.2
+
+# ── 中文拼音变体（同音纠错）──
+pypinyin==0.55.0
+
+# ── 纪要渲染与材料解析 ──
+Markdown==3.10.3
+weasyprint==70.0          # Markdown → PDF
+PyMuPDF==1.28.2           # 会议材料 PDF 提取
+python-docx==1.2.0        # .docx 材料
+python-pptx==1.0.2        # .pptx 材料
+openpyxl==3.1.5           # .xlsx 材料
+PyYAML==6.0.3             # 读本地 Agent 的模型配置（可选）
