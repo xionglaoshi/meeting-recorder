@@ -216,3 +216,9 @@ bash asr/build.sh       # 需要 Xcode 命令行工具（swiftc）
 ## 13. 许可
 
 **MIT License** —— 见 [LICENSE](LICENSE)。第三方组件与服务见 [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md)。
+
+## 相关项目
+
+- [hermes-desktop-beautify](https://github.com/xionglaoshi/hermes-desktop-beautify) —— Hermes 桌面端美化插件；
+  它把本工具作为「会议记录」面板的运行时依赖（面板就是嵌 `127.0.0.1:8789` 这张页）。
+- [hermes-office-viewer](https://github.com/xionglaoshi/hermes-office-viewer) —— Hermes 桌面端的文档预览插件。
