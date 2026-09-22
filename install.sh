@@ -23,13 +23,13 @@ if command -v uv >/dev/null 2>&1; then echo "  ✓ 发现 uv（安装会快一�
 
 echo "── 2/4 建目录 ──"
 run "mkdir -p roster records logs"
-echo "  ✓ roster/（放你的花名册）records/（会议记录落这里）logs/"
+echo "  ✓ roster/ 放你的花名册 · records/ 会议记录落这里 · logs/ 日志"
 
 echo "── 3/4 铺模板文件（已存在就跳过，绝不覆盖）──"
 for pair in ".env.example:.env" "vocab_seed.example.py:vocab_seed.py" "hr_sources.example.py:hr_sources.py"; do
   src="${pair%%:*}"; dst="${pair##*:}"
-  if [ -e "$dst" ]; then echo "  = $dst 已存在，跳过"
-  else run "cp '$src' '$dst'"; echo "  + $dst（照 $src 里的说明填）"; fi
+  if [ -e "$dst" ]; then echo "  = ${dst} 已存在，跳过"
+  else run "cp '${src}' '${dst}'"; echo "  + ${dst}（照 ${src} 里的说明填）"; fi
 done
 
 echo "── 4/4 装 Python 依赖 ──"
