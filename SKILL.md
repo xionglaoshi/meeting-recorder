@@ -1,6 +1,6 @@
 ---
 name: meeting-recorder
-description: "会议记录/录音转写/纪要时用：本地录音→实时转写→智能纪要→自动归档，入口 127.0.0.1:8789."
+description: 用户要求本地会议录音、转写、整理纪要或查阅该服务产物时使用；按需运行。
 license: 个人非商用（见同目录 LICENSE）
 metadata:
   version: 1.0.14
@@ -12,8 +12,11 @@ metadata:
 
 # 会议记录员（Meeting Recorder）
 
-本地会议记录服务：**麦克风录音 → 实时语音转写 → 三级纠错 → 智能纪要 → 自动归档**。
-前端仿豆包美工，转写主引擎**阿里百炼 qwen-audio-3.0-asr-flash-streaming**（2026-08-20 起由 paraformer 迁移而来）+ macOS Speech 本地兜底；纪要 LLM 用 DeepSeek。
+## 技能维护与发布
+
+当本技能的 `SKILL.md`、`references/`、`scripts/` 或其他公开技能文件发生修改并通过校验后，自动检查对应的同名 GitHub 仓库，将本次公开变更提交并推送到默认分支。提交前必须检查 `git diff` 和待提交文件，禁止把 `.env`、真实会议记录、录音、词表、`records/`、本地数据库、备份、token、账号信息或其他隐私资料带入仓库；推送后回读远程提交和工作区状态。若远程认证、分支冲突或校验失败，停止推送并报告原因，不把本地修改说成已发布。
+
+本地会议记录服务：**麦克风录音 → 实时语音转写 → 纠错 → 智能纪要 → 归档**。2026-08-20 的设计采用阿里百炼 ASR 与 macOS Speech 兜底、DeepSeek 生成纪要；运行模型和模式以当前配置为准。
 
 > ⚠️ **两个模型是两个厂商、两件事，别搞混（2026-09-13 用户明确）**：
 >
@@ -25,13 +28,12 @@ metadata:
 > **DeepSeek 不能做语音识别**，它只吃"流水文本"产出纪要；转写这段从不经过 DeepSeek。
 > 用户此前横向测过多种语音识别模型，**最终定的就是阿里百炼那套，不要替换**。
 
-## 归属与位置（2026-09-20 起）
+## 归属与位置（2026-09-29 起）
 
-- **唯一正本 = `~/.agents/skills/meeting-recorder/`**（公用资产区·跨 Agent 共用件）。
-  Codex / Hermes / dsh 三家**各自目录下的副本已删除**，一律用这一份，**不要再在 `~/.codex/skills/`、`~/.hermes/skills/`、`~/.dsh/skills/` 里重建副本**。
-- **按需启停（四家统一，不得自启）**：用户手动 `meeting-up`（= `~/.agents/bin/meeting-up.sh`，等价 `bash ~/.agents/skills/meeting-recorder/start.sh`）/ `meeting-down` 收掉；**禁止**写进 launchd / 定时任务 / 宿主启动钩子，**Agent 不得自行拉起**。
-- **产物与数据都在这一个目录里**：会议记录 `records/YYYYMMDDNNN/`、热词表 `vocab.json`、本地人名索引 `references/人名职责索引.local.md`——三家会话共用同一份历史，别再往各家目录复制。
-- 归属契约见 `~/.agents/README.md`；沿革与端口/接口见 LLM-WIKI [[memories/tools/meeting-server]]。
+- 本技能由 Codex 独有，正本位于 `~/.codex/skills/meeting-recorder/`；会议记录、热词表和本地索引均由 Codex 管理。
+- 按需启停：用户明确要求录音、转写、纪要或使用服务时，可为本任务运行 `meeting-up` / `meeting-down`，或调用本技能目录内的 `start.sh` / `stop.sh`；不得配置开机自启或后台常驻。
+- 资产与凭据只读取 Codex 自有目录；跨 Agent 知识协作通过 WIKI 完成。
+- 沿革与端口/接口见 LLM-WIKI [[memories/tools/meeting-server]]。
 
 ## 生命周期流水线（v2.0 架构，2026-08-20 重构）
 
@@ -97,20 +99,21 @@ metadata:
 - 五步收口：终止录音 → 检查流水完整 → 生成纪要 → 收尾（主题写 metadata，目录不搬家）→ 返回通知
 - **产物落位（三层，2026-08-20 确认 + 2026-08-27 单目录机制）**：
   - **主存档**（唯一权威源）：`meeting/<YYYYMMDDNNN>/`（日期+当天序号，如 `20260827001`，dsh 单目录机制）——**开始会议即创建，全程使用**：录音中过程文件（pcm/流水/清洗稿/纠错清单/asr_stderr）与最终产物（流水.md + 清洗稿.md + 纠错清单.md + 存疑清单.md + 会议纪要.md + metadata.json + materials/）**同目录，结束不再搬家**；**pcm/wav/mp3 一律不留**：收口删、录音中断也删、服务启动扫掉遗留（2026-09-13 定稿，详见 `references/architecture-and-pipeline.md`）；主题（LLM 提取）写入 metadata.json 的 `topic` 字段供历史列表显示
-  - **同步① 知识库**：`$MEETING_KNOWLEDGE_BASE/meetings/YYYY-MM-DD-<主题>-会议纪要.md`（仅纪要；未设该变量则跳过同步）
-  - **同步② Obsidian Inbox**：⛔ **已废弃（2026-09-17）**——Obsidian 弃用后不再有 Inbox 通道；`obsidian_inbox()` 恒返回 None，除非显式设 `MEETING_OBSIDIAN_INBOX`
-  - **同步范围铁律**：只有「正式版会议纪要」同步到 WIKI；**流水/录音/清洗稿/纠错清单一律留在 meeting/ 主存档，不同步**
+  - **本地交付**：纪要与过程材料保存在 `meeting/<YYYYMMDDNNN>/` 主存档。
+  - **WIKI 同步**：默认关闭；只有用户明确要求或已有授权覆盖时，才以 `MEETING_ENABLE_WIKI_SYNC=1` 启用。`MEETING_KNOWLEDGE_BASE` 只指定目标位置，不构成写入授权；启用后仅同步正式纪要并追加日志。
+  - **Obsidian**：默认不使用；仅在用户明确要求且显式配置目标时同步。
+  - 流水、录音、清洗稿、纠错清单不写入 WIKI。
 
 ## 腾讯会议集成（2026-08-20 实测验证）
 
-**入口（2026-09-13 起随本技能自持）**：`~/.agents/skills/meeting-recorder/tools/tencent_meeting/scripts/tencent_meeting.py`（CLI，v1.0.14）
+**入口（2026-09-13 起随本技能自持）**：`~/.codex/skills/meeting-recorder/tools/tencent_meeting/scripts/tencent_meeting.py`（CLI，v1.0.14）
 > 原先指向 Trae 的 wemeet 插件目录，插件已不存在；该 CLI 已随服务迁入本技能目录，工具说明见同目录 `REFERENCE.md`。
 > ⚠️ **该 CLI 是腾讯官方代码（无开源许可），已写进 `.gitignore`，不进 Git 仓库**——本机照常可用，分享仓库时不会带上它。
 **Token**：`TENCENT_MEETING_TOKEN`（~/.codex/.env）
 
 ```bash
 # 调用工具（token 从 .env 注入）
-cd ~/.agents/skills/meeting-recorder/tools/tencent_meeting/scripts
+cd ~/.codex/skills/meeting-recorder/tools/tencent_meeting/scripts
 TENCENT_MEETING_TOKEN=$(grep TENCENT_MEETING_TOKEN ~/.codex/.env | cut -d= -f2-) \
   python3 tencent_meeting.py tools/call '{"name":"<工具>","arguments":{...,"_client_info":{"os":"macos-26","agent":"codex","model":"deepseek-flash"}}}'
 ```
@@ -139,19 +142,19 @@ TENCENT_MEETING_TOKEN=$(grep TENCENT_MEETING_TOKEN ~/.codex/.env | cut -d= -f2-)
 
 **执行**（Hermes 调用）：
 ```bash
-cd ~/.agents/skills/meeting-recorder
+cd ~/.codex/skills/meeting-recorder
 python3 tx_meeting.py --keyword 产品评审 --title "产品评审会" --attendees "张三、李四"
 # 或按会议号:  --code 259932425
 # 或先列出:   python3 tx_meeting.py --list --days 30
 ```
 
-**全自动链路**：search_records 找会议 → 拉完整转写（get_transcripts_details）→ 原始稿存 Downloads → **后端须已手动启动**（未起则脚本提示，不自动拉起）→ /api/import 全链路优化（L2校对+实体核验+质量标准纪要）→ **自动同步 WIKI meetings/ + Obsidian Inbox/** → 优化稿存 Downloads
+**历史链路记录**：search_records 找会议 → 拉转写 → 原始稿存 Downloads → `/api/import` 整理并输出纪要。执行时按用户当前指令决定是否启动服务及是否同步知识库；WIKI 同步默认关闭，需本轮授权并显式启用。Obsidian 同步默认关闭。
 
 **注意**：
 - 会议日期自动从腾讯会议元数据注入标题（三要素时间真实，避免"2025年X月X日"占位）
 - 会议未开云录制/转写（has_transcript_content=false）→ 脚本报错提示
 - 时间范围默认回溯 60 天（--days 可调）
-- **后端不自动拉起**（2026-09-17 用户定）：服务平时静默，未启动时脚本只报错并给出 `start.sh` 启动命令，需你手动执行
+- 服务不常驻、不配置开机自启；用户明确要求本地录音、导入或纪要处理时，可为当前任务按需启动。
 - 智能纪要（get_smart_minutes）用于对比，可选
 
 ## 可靠性加固（2026-08-20 实测后实施）
@@ -181,13 +184,13 @@ python3 tx_meeting.py --keyword 产品评审 --title "产品评审会" --attende
 - 用户说"会议记录 / 录音转写 / 语音转文字 / 会议纪要 / 开会记录 / 记一下会议"
 - 用户要求对已有音频文件（m4a/wav/pcm）转写或补生成纪要
 - 用户提到 8789 端口、会议记录员、meeting-server 相关任务
-- 触发后：服务**按需启动（无 launchd 自启）**；先探活 `curl -s http://127.0.0.1:8789/api/state`，未运行时 `bash ~/.agents/skills/meeting-recorder/start.sh`；入口 http://127.0.0.1:8789/
+- 触发后：服务**按需启动（无 launchd 自启）**；先探活 `curl -s http://127.0.0.1:8789/api/state`，未运行时 `bash ~/.codex/skills/meeting-recorder/start.sh`；入口 http://127.0.0.1:8789/
 
 ## 快速开始
 
 > **按需启动（2026-09-13 起；此前 2026-09-02～09-11 曾用 launchd 自启，已废弃）**：
 >
-> 🔴 **2026-09-20 用户口径（四家统一）**：本服务**不开机自启、不后台常驻**——**只在用户明确要用的那一次**才拉起（公用一键 `meeting-up` / `meeting-down`，或本技能 `start.sh`）；**Agent 不得自行拉起**，禁止写进 launchd / 定时任务 / 宿主启动钩子。
+> 本服务不开机自启、不后台常驻。用户明确要求本地录音、转写或纪要任务时，可按需启动服务；不配置 launchd、定时任务或宿主启动钩子。
 > 服务**没有开机自启**，也没注册任何 launchd 服务。要用就先探活、没起再拉：
 
 ```bash
@@ -195,14 +198,14 @@ python3 tx_meeting.py --keyword 产品评审 --title "产品评审会" --attende
 curl -s http://127.0.0.1:8789/api/state        # {"state":"idle",...} = 正常
 
 # 未运行 / 需要重启（优雅：先停录音任务 → 杀进程 → 重新接管端口）
-bash ~/.agents/skills/meeting-recorder/start.sh
+bash ~/.codex/skills/meeting-recorder/start.sh
 
 # 停止
-bash ~/.agents/skills/meeting-recorder/stop.sh
+bash ~/.codex/skills/meeting-recorder/stop.sh
 ```
 
-> 解释器不写死：`start.sh` 走 `runtime.py` 探测（项目 `.venv` → 用户已有 AI Agent 环境 → 系统 Python），
-> 依赖已并入 `~/.codex/venv`（公用副本可回退 `~/.hermes/venv` / `~/.dsh/venv`）。API key 由 `settings.py` 读环境变量或 `.env` 链。
+> 解释器不写死：`start.sh` 走 `runtime.py` 探测（项目 `.venv` → Codex 自有环境 → 系统 Python），
+> 依赖已并入 `~/.codex/venv`。API key 由 `settings.py` 读环境变量或 `.env` 链。
 > ⛔ **2026-09-20 用户明确口径：不得恢复开机自启 / 后台常驻**（下方「运维要点 §开机自启」只作历史存档，不要执行）。
 
 ## 结束会议五步流程（用户确认的完整交付流程）
@@ -223,7 +226,7 @@ bash ~/.agents/skills/meeting-recorder/stop.sh
 
 步骤3：基于完整流水 → LLM 提炼正式版会议纪要
        ├─ 独立执行，可重试，失败记录 last_error 不阻塞
-       ├─ 成功后同步导出 Obsidian + WIKI
+       ├─ 成功后生成本地纪要；仅按授权同步知识库
        └─ MEETING_SKIP_MINUTES=1 可跳过（测试/只看流水时用）
 
 步骤4：收尾（单目录机制，2026-08-27：不再搬家）
@@ -298,10 +301,12 @@ bash ~/.agents/skills/meeting-recorder/stop.sh
 | `MEETING_PORT` | `8789` | 监听端口 |
 | `MEETING_RECORDS_DIR` | `<技能目录>/records` | 产物根 |
 | `MEETING_SKIP_MINUTES` | — | 置 `1` 只转写不生成纪要（省 token，排查用） |
-| `MEETING_KNOWLEDGE_BASE` / `MEETING_OBSIDIAN_INBOX` | 自动探测 | 配了才同步纪要 |
+| `MEETING_KNOWLEDGE_BASE` | 自动探测 | 仅指定 WIKI 目标；本身不授权写入 |
+| `MEETING_ENABLE_WIKI_SYNC` | 默认关闭 | 仅在授权后设为 `1` 才写 WIKI 并追加日志 |
+| `MEETING_OBSIDIAN_INBOX` | 未配置 | 默认不写；仅按用户要求显式配置 |
 | `MEETING_VOCAB_PREFIX` | `meeting` | 百炼热词表前缀 |
 
-读取顺序：**环境变量 > 本技能 `.env` > `~/.config/meeting-server/.env` > 各家 `.env`（`~/.codex` → `~/.hermes` → `~/.dsh`）> 公用兜底 `~/.agents/.env`**；
+读取顺序：**环境变量 > 本技能 `.env` > `~/.config/meeting-server/.env` > Codex `.env`（`~/.codex/.env`）**；
 `.env` 链按序**合并**（靠前优先），所以技能内 `.env` 只写要覆盖的那几项即可。
 **凭证类设置以文件为权威**——宿主应用（Codex）会把会话启动时的 `.env` 导出进 shell，
 那份是历史快照，若让环境变量优先会静默盖住新值（此坑已踩过）。
