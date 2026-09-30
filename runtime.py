@@ -56,12 +56,9 @@ _PROBE_SRC = (
 
 # 已知候选位置；{home} 展开为用户主目录，{project} 为本项目名
 CANDIDATE_PATTERNS = (
-    ("Codex 共享环境", "{home}/.codex/venv/bin/python"),
+    ("Codex venv", "{home}/.codex/venv/bin/python"),
     ("Codex 用途环境", "{home}/.codex/venvs/{project}/bin/python"),
     ("Codex 其他环境", "{home}/.codex/venvs/*/bin/python"),
-    ("Hermes 共享环境", "{home}/.hermes/venv/bin/python3"),
-    ("DSH 共享环境", "{home}/.dsh/venv/bin/python3"),
-    ("TRAE 环境", "{home}/.trae-cn/**/venv/bin/python"),
     ("用户 ~/n", "{home}/n/bin/python3"),
     ("用户级 venv", "{home}/.venv/bin/python"),
     ("uv 托管 Python", "{home}/.local/share/uv/python/*/bin/python3"),

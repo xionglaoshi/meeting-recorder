@@ -7,7 +7,7 @@
 
 - **三按钮**：开始 / 暂停恢复 / 结束（结束确认框提示五步流程）
 - **会议基本信息三行输入**（选填）：会议主题 / 参会人员 / 会议地点，独立三行、各自 label；结束时传给 `/api/stop`，写入纪要"一、会议基本信息"
-- **一键启动**：点开始时先探测 `/api/state`——服务未启动则提示手动运行 `bash ~/.agents/skills/meeting-recorder/start.sh` 或点"⚡ 一键启动"（引导式，浏览器不能直接拉起系统服务；真正的启动由 Agent 侧协助执行：`bash ~/.agents/skills/meeting-recorder/start.sh`）
+- **一键启动**：点开始时先探测 `/api/state`——服务未启动则提示手动运行 `bash ~/.codex/skills/meeting-recorder/start.sh` 或点"⚡ 一键启动"（引导式，浏览器不能直接拉起系统服务；真正的启动由 Agent 侧协助执行：`bash ~/.codex/skills/meeting-recorder/start.sh`）
 - **实时总结已废弃（2026-08-19 用户确认）**：会议过程中不做 LLM 阶段性总结，只流式展示流水；前端无「实时总结」Tab
 - **暂停/恢复标记**：流水中以黄色标记行展示 `⏸ 会议暂停（HH:MM:SS）` / `▶ 会议恢复`，前端 renderSents 对 `marker` 条目特殊样式
 - 麦克风选择器 `#micSelect`（localStorage `meeting.mic` 记忆上次选择）
@@ -56,7 +56,7 @@
 **用户明确**：设定模板目的=方便自己读，不严格按模板影响不大；但**最后一步生成正式纪要必须基于 模板+流水+补充信息**，流程要固化。**不要为追模板重新生成已交付纪要**（8-31 中电建纪要维持 14:26 版本，未重生成）。
 
 已固化（engine.py）：
-1. **模板外置为唯一权威源**：`_load_minutes_standard()` 实时读 `~/.agents/skills/meeting-recorder/references/会议纪要质量标准.md` 注入 system prompt（文件缺失回退内置精简版）——**改模板文件即改所有后续纪要**，不再与代码硬编码副本漂移
+1. **模板外置为唯一权威源**：`_load_minutes_standard()` 实时读 `~/.codex/skills/meeting-recorder/references/会议纪要质量标准.md` 注入 system prompt（文件缺失回退内置精简版）——**改模板文件即改所有后续纪要**，不再与代码硬编码副本漂移
 2. **截断防御**（本次 8-31 事故根因）：`_chat` 解析 finish_reason，`length` 截断自动 max_tokens 翻倍重试（≤32000），仍截断抛错——绝不静默返回半截纪要
 3. **结构校验（软性）**：`_validate_minutes_structure` 检查标题三要素/六要素/开篇/编号段落，不通过自动重试（带缺失提示）；重试耗尽返回最后一份结果（不完美但不丢内容，不卡死）——MapReduce 最终合成同样带校验
 4. **regen 同步阻塞问题（待办）**：regen 是同步请求，跑 10-30 分钟期间整个后端无响应（页面轮询/录音被阻塞）。需改后台任务模式（提交立即返回+完成通知）。

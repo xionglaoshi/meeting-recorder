@@ -1,4 +1,4 @@
-"""会议纪要导出：① Obsidian Inbox ② WIKI meetings/
+"""会议纪要本地归档与可选外部同步：默认本地保存；WIKI 同步须显式启用。
 
 命名规则（用户 Obsidian 规范）：
 - 专项会议：`YYYYMMDD <主题>纪要.md`（空格分隔，参考 20260715 ××业务研讨会纪要.md）
@@ -104,6 +104,9 @@ def export_to_obsidian(minutes_text, title="", date=None):
 
 def export_to_wiki(minutes_text, title="", date=None, task_dir=""):
     """WIKI meetings/YYYY-MM-DD-<主题>-会议纪要.md + log.md 追加"""
+    if os.environ.get("MEETING_ENABLE_WIKI_SYNC") != "1":
+        print("[export] WIKI 同步未显式启用，纪要仅保存在本地 records/", flush=True)
+        return None
     target = wiki_dir()
     if not target:
         print("[export] 未配置知识库目录，跳过 meetings/ 入库（纪要仍在 records/ 内）", flush=True)
@@ -141,7 +144,7 @@ def export_to_wiki(minutes_text, title="", date=None, task_dir=""):
 
 
 def export_all(minutes_text, title="", date=None, task_dir=""):
-    """导出双库，返回 {obsidian, wiki} 路径（未配置的目标返回 None）"""
+    """导出到已配置目标；WIKI 仅在 MEETING_ENABLE_WIKI_SYNC=1 时写入。"""
     ob = export_to_obsidian(minutes_text, title, date)
     wk = export_to_wiki(minutes_text, title, date, task_dir)
     return {"obsidian": ob, "wiki": wk}

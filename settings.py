@@ -5,8 +5,7 @@
 把「去哪读密钥」「产物写哪」「要不要写回知识库」这类环境相关的事收敛到一处，
 让服务本身不绑任何特定平台的目录。历史代码里散落的 ~/.hermes/... 就是这么来的。
 
-⚠️ 2026-09-20：本技能已迁为**公用件**（正本 `~/.agents/skills/meeting-recorder/`，四家共用一份），
-   故凭证链**同时认三家**（`~/.codex` → `~/.hermes` → `~/.dsh`）+ 公用兜底 `~/.agents/.env`。
+⚠️ 2026-09-29：本技能由 Codex 独有（正本 `~/.codex/skills/meeting-recorder/`），凭证只读取环境变量、技能本地配置与 Codex 自有 `~/.codex/.env`。
 
 三类配置，优先级都是「显式环境变量 > 项目内约定 > 用户级约定 > 自动探测」：
 
@@ -18,13 +17,14 @@
 2. 凭证（DASHSCOPE_API_KEY / DEEPSEEK_API_KEY / TENCENT_MEETING_TOKEN …）
    先查环境变量，再按顺序**合并**下列 .env 文件（靠前的优先，同名键不覆盖）：
      $MEETING_ENV_FILE → <服务根>/.env → ~/.config/meeting-server/.env
-     → ~/.codex/.env → ~/.hermes/.env → ~/.dsh/.env → ~/.agents/.env（公用兜底，§6.4 第三跳）
+     → ~/.codex/.env
    —— 合并而非"取第一个存在的文件"，所以项目内 .env 只写要覆盖的几项即可，
      不会把后面的凭证文件整个遮住。
 
 3. 可选集成（都没有就自动降级，不影响核心录音转写功能）
    $MEETING_KNOWLEDGE_BASE     知识库根（LLM-WIKI）
-   $MEETING_OBSIDIAN_INBOX     纪要同步到的 Obsidian 收件箱
+   $MEETING_ENABLE_WIKI_SYNC   仅设为 1 时才将纪要写入 WIKI 并追加日志
+   $MEETING_OBSIDIAN_INBOX     显式配置后才同步到 Obsidian 收件箱
    $MEETING_HR_ETL             人事库重建脚本（默认用本目录自持的 hr_etl.py）
    $MEETING_EMPLOYER_ENTITIES  单位实体底稿（employer-entities.md）
    $MEETING_TENCENT_CLI_DIR    腾讯会议 CLI 目录
@@ -59,9 +59,6 @@ def env_files():
         HOME / ".env",
         Path.home() / ".config" / PROJECT / ".env",
         Path.home() / ".codex" / ".env",
-        Path.home() / ".hermes" / ".env",      # 公用副本：三家 .env 都认
-        Path.home() / ".dsh" / ".env",
-        Path.home() / ".agents" / ".env",      # 公用兜底（§6.4 第三跳）
     ]
     return chain
 

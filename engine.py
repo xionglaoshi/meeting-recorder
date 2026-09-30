@@ -149,7 +149,7 @@ def load_ds_api_key():
 
 
 def make_task_dir():
-    """会议专属目录：records/YYYYMMDDNNN（日期+当天序号；records=~/.agents/skills/meeting-recorder/records，公用产物根 2026-09-20）。
+    """会议专属目录：records/YYYYMMDDNNN（日期+当天序号；records=~/.codex/skills/meeting-recorder/records，公用产物根 2026-09-20）。
     开始会议即创建，所有过程文件（pcm/流水/清洗稿/纠错清单）与最终产物（纪要/metadata/materials）
     全程放同一目录，结束时不再搬家。序号 001 起（对齐 dsh mkSessionDir）。"""
     os.makedirs(MEETING_ROOT, exist_ok=True)

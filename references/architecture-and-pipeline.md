@@ -25,20 +25,20 @@
 
 | 文件 | 职责 |
 |---|---|
-| `~/.agents/skills/meeting-recorder/server.py` | FastAPI 服务（/api/* + 静态页面） |
-| `~/.agents/skills/meeting-recorder/engine.py` | 录音/转写引擎：sox → ASR → 句子 → 纪要 |
-| `~/.agents/skills/meeting-recorder/export_minutes.py` | 纪要导出（知识库 `$MEETING_KNOWLEDGE_BASE` 下的 **meetings/**；未配置则只落本地 `records/`） |
-| `~/.agents/skills/meeting-recorder/static/index.html` | 前端页面（仿豆包美工） |
-| `~/.agents/skills/meeting-recorder/asr/swift_asr.swift` | Speech 框架识别器源码（改完需重编译） |
-| `~/.agents/skills/meeting-recorder/asr/swift_asr_bin` | 预编译识别器二进制（engine 优先用） |
-| `~/.agents/skills/meeting-recorder/asr/asr_macos.swift` | Speech 文件级识别器源码（SFSpeechURLRecognitionRequest，v1.0.5 吸收；⚠️ 不嵌 plist 不调 requestAuthorization，见 `changelog.md` 的 v1.0.5） |
-| `~/.agents/skills/meeting-recorder/asr/asr_macos_bin` | 文件级识别器预编译二进制（source 兜底用，缺失时 `_speech_file_fallback` 自动编译） |
-| `~/.agents/skills/meeting-recorder/asr/macos_speech.py` | Speech 兜底转写 CLI（dsh 蒸馏，独立可用） |
-| `~/.agents/skills/meeting-recorder/vocab.json` | 热词表（由 `vocab_seed.py` 种子 ＋ 人事库 ＋ 知识库实体合并而来，不进 Git） |
-| `~/.agents/skills/meeting-recorder/start.sh` | 启动脚本（端口检测 + 启动） |
+| `~/.codex/skills/meeting-recorder/server.py` | FastAPI 服务（/api/* + 静态页面） |
+| `~/.codex/skills/meeting-recorder/engine.py` | 录音/转写引擎：sox → ASR → 句子 → 纪要 |
+| `~/.codex/skills/meeting-recorder/export_minutes.py` | 纪要导出（知识库 `$MEETING_KNOWLEDGE_BASE` 下的 **meetings/**；未配置则只落本地 `records/`） |
+| `~/.codex/skills/meeting-recorder/static/index.html` | 前端页面（仿豆包美工） |
+| `~/.codex/skills/meeting-recorder/asr/swift_asr.swift` | Speech 框架识别器源码（改完需重编译） |
+| `~/.codex/skills/meeting-recorder/asr/swift_asr_bin` | 预编译识别器二进制（engine 优先用） |
+| `~/.codex/skills/meeting-recorder/asr/asr_macos.swift` | Speech 文件级识别器源码（SFSpeechURLRecognitionRequest，v1.0.5 吸收；⚠️ 不嵌 plist 不调 requestAuthorization，见 `changelog.md` 的 v1.0.5） |
+| `~/.codex/skills/meeting-recorder/asr/asr_macos_bin` | 文件级识别器预编译二进制（source 兜底用，缺失时 `_speech_file_fallback` 自动编译） |
+| `~/.codex/skills/meeting-recorder/asr/macos_speech.py` | Speech 兜底转写 CLI（dsh 蒸馏，独立可用） |
+| `~/.codex/skills/meeting-recorder/vocab.json` | 热词表（由 `vocab_seed.py` 种子 ＋ 人事库 ＋ 知识库实体合并而来，不进 Git） |
+| `~/.codex/skills/meeting-recorder/start.sh` | 启动脚本（端口检测 + 启动） |
 
 产物目录（dsh 单目录机制，2026-08-27 用户定稿，替代旧 tmp→归档两段式）：
-- 开始会议即创建 → `~/.agents/skills/meeting-recorder/records/YYYYMMDDNNN/`（如 20260827001，当天序号 001 起）
+- 开始会议即创建 → `~/.codex/skills/meeting-recorder/records/YYYYMMDDNNN/`（如 20260827001，当天序号 001 起）
 - **全程使用**：录音中过程文件（pcm/流水/清洗稿/纠错清单/asr_stderr）与最终产物（流水/清洗稿/纪要/metadata/materials）**同目录**；收口后**音频一律删除**（2026-09-13 定稿）
 - 任务完成后**不再搬家**；主题由 LLM 提取写入 metadata.json `topic` 字段（历史列表显示用）
 - 未正常收口（有流水但无 metadata.json）→ 视为"未收口任务"，可继续/归档/删除

@@ -1319,7 +1319,7 @@ async function serverAlive() {
     if (r.ok) { $('serverState').style.display = 'none'; return true }
   } catch (e) { /* 未启动 */ }
   $('serverState').style.display = ''
-  $('serverState').innerHTML = '⚠ 后端服务未启动。请运行 <code>meeting-up</code>（= <code>bash ~/.agents/skills/meeting-recorder/start.sh</code>）启动后刷新页面。'
+  $('serverState').innerHTML = '⚠ 后端服务未启动。请运行 <code>meeting-up</code>（= <code>bash ~/.codex/skills/meeting-recorder/start.sh</code>）启动后刷新页面。'
   return false
 }
 

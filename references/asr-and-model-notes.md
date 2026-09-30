@@ -31,7 +31,7 @@
 
 ### 热词维护（qwen 版）
 ```bash
-cd ~/.agents/skills/meeting-recorder
+cd ~/.codex/skills/meeting-recorder
 python3 build_vocab.py        # 重新生成字典（保留 meta）
 python3 sync_vocab.py --target-model qwen-audio-3.0-asr-flash-streaming  # 预编译热词（可选）
 ```
@@ -104,7 +104,7 @@ python3 sync_vocab.py --target-model qwen-audio-3.0-asr-flash-streaming  # 预�
 
 ## 专用词汇字典（v2.0 增强版，2026-08-19）
 
-**文件**：`~/.agents/skills/meeting-recorder/vocab.json`（build_vocab.py 生成）
+**文件**：`~/.codex/skills/meeting-recorder/vocab.json`（build_vocab.py 生成）
 **数据源**（信息源铁律：知识库 → WPS → 外部）：知识库内的人事档案（`entities/people/` 之类：在职名册 + 职务/部门；明细库按需重建为 /tmp/hr_data.db，见 `hr_etl.py`）为主；你自己的「简称/别名矩阵」做补充；组织架构与任命文件提供管理层分管分工。
 
 **三类纠错能力**：
@@ -127,7 +127,7 @@ python3 sync_vocab.py --target-model qwen-audio-3.0-asr-flash-streaming  # 预�
 
 **L1 热词维护**（字典更新后必做）：
 ```bash
-cd ~/.agents/skills/meeting-recorder
+cd ~/.codex/skills/meeting-recorder
 python3 sync_vocab.py --target-model qwen-audio-3.0-asr-flash-streaming
 # 全称 + 口语简称变体 → 百炼热词表（幂等更新，免费）
 ```
@@ -142,16 +142,16 @@ python3 sync_vocab.py --target-model qwen-audio-3.0-asr-flash-streaming
 > `paraformer-realtime-v2`（上次同步时留下的值），不影响现有链路。
 
 **维护**：
-- 重新生成：`python3 ~/.agents/skills/meeting-recorder/build_vocab.py`（需 pypinyin）
+- 重新生成：`python3 ~/.codex/skills/meeting-recorder/build_vocab.py`（需 pypinyin）
 - 高危同音词：编辑 build_vocab.py 的 HOMOPHONE 数组
 - 消歧候选：自动从 hr_data.db 职务/部门生成；高管分管详情见 `references/人名职责索引.md`
 - **组织架构调整后**：重读 WPS 聘任文件更新人名职责索引，再重跑 build_vocab.py
 - **校验流程（新增实体后必做）**：
   1. WIKI/Obsidian 先建实体（公司/项目/合作方/人名）
-  2. 重跑 `python3 ~/.agents/skills/meeting-recorder/build_vocab.py`（**建议用 venv python**：`~/.codex/venv/bin/python`，含 pypinyin 拼音变体；生成后**自动挂接 check_vocab 自检**，硬污染/权威源缺失会提示）
-  3. 需要时单独跑校验：`python3 ~/.agents/skills/meeting-recorder/check_vocab.py`（退出码 0=通过）
+  2. 重跑 `python3 ~/.codex/skills/meeting-recorder/build_vocab.py`（**建议用 venv python**：`~/.codex/venv/bin/python`，含 pypinyin 拼音变体；生成后**自动挂接 check_vocab 自检**，硬污染/权威源缺失会提示）
+  3. 需要时单独跑校验：`python3 ~/.codex/skills/meeting-recorder/check_vocab.py`（退出码 0=通过）
      - 校验脚本权威源：employer-entities.md + LLM-WIKI 全站文件名/目录（Obsidian）+ hr_data.db
-     - hr_data.db **按需自动重建**：脚本缺失时自动调 `~/.agents/skills/meeting-recorder/hr_etl.py`（服务自持；`~/.codex/scripts/hr_etl.py` 已成指针存根）读 WPS 员工档案材料，幂等写 `/tmp/hr_data.db`
+     - hr_data.db **按需自动重建**：脚本缺失时自动调 `~/.codex/skills/meeting-recorder/hr_etl.py`（服务自持；`~/.codex/scripts/hr_etl.py` 已成指针存根）读 WPS 员工档案材料，幂等写 `/tmp/hr_data.db`
      - 只报真问题：company/project/partner term 无法匹配权威源、homophone term 非法、disambiguation 人名不在人事库
      - ⚠️ 行业通用词（砂石/码头/国企等）不校验——它们不是企业专属实体
   4. 发现"变体当规范词"类错误（如"鑫宏"当 term）→ 立即修正 build_vocab.py 后重生成

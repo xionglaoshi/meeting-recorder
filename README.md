@@ -82,7 +82,8 @@ python3 smoke_test.py                     # 内置冒烟测试
 | `TENCENT_MEETING_TOKEN` | 可选 | 腾讯会议记录导入 |
 | `MEETING_LLM_MODEL` | 可选 | 换纪要模型（默认 `deepseek-flash`） |
 | `DASHSCOPE_BASE_URL` | 可选 | 百炼专属部署/代理域名 |
-| `MEETING_KNOWLEDGE_BASE` | 可选 | 知识库根目录（配了才同步纪要） |
+| `MEETING_KNOWLEDGE_BASE` | 可选 | WIKI 根目录（只指定位置，不代表授权写入） |
+| `MEETING_ENABLE_WIKI_SYNC=1` | 默认关闭 | 显式启用后，纪要自动写入 WIKI/meetings 并追加 log.md |
 | `MEETING_HR_SRC_DIR` / `MEETING_HR_DB` | 可选 | 花名册目录 / 人事库路径 |
 | `MEETING_SKIP_MINUTES=1` | 可选 | 只转写不生成纪要（省额度，调试用） |
 
@@ -199,7 +200,7 @@ bash asr/build.sh       # 需要 Xcode 命令行工具（swiftc）
 
 ## 11. 给 Agent 用
 
-把这个目录放进你的 agent 能读到的技能目录（本机示例：`~/.agents/skills/meeting-recorder/`），
+把这个目录放进你的 agent 能读到的技能目录（本机示例：`~/.codex/skills/meeting-recorder/`），
 让 agent 读 `SKILL.md` 即可——里面写了什么时候该用它、服务怎么起、结果在哪、有哪些坑。
 
 如果你用的是 **Hermes 桌面端**：装 [hermes-office-viewer](https://github.com/xionglaoshi/hermes-office-viewer) 后，可以在右侧栏直接开会议记录面板（`127.0.0.1:8789`）。

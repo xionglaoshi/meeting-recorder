@@ -1,0 +1,7 @@
+interface:
+  display_name: "本地会议录音"
+  short_description: "用户要求本地会议录音、转写、整理纪要或查阅该服务产物时使用。"
+  default_prompt: "$meeting-recorder：使用本地会议录音工具完成这项任务。"
+
+policy:
+  allow_implicit_invocation: true
