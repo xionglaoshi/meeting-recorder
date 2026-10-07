@@ -415,7 +415,7 @@
         </div>
         <div style="margin-top:6px;display:flex;align-items:center;gap:8px">
           <button class="btn btn-start" id="btnImport" style="padding:8px 16px">⚙️ 生成正式纪要</button>
-          <span class="meta-tip">读取路径文件 → 纠错 → 实体核验 → 结合补充信息 → 正式纪要 → 归档双库</span>
+          <span class="meta-tip">读取路径文件 → 纠错 → 实体核验 → 结合补充信息 → 正式纪要 → 本地归档 → 询问是否保存到 WIKI</span>
         </div>
       </div>
     </div>
@@ -656,12 +656,38 @@ function escapeHtml(s) {
 function escapeAttr(s) { return String(s).replace(/"/g, '&quot;') }
 
 // ── 轮询状态 ─────────────────────────
+const wikiPrompts = new Set()
+async function saveWiki(dir) {
+  try {
+    const r = await fetch(API + '/save_wiki', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({dir})})
+    const d = await r.json()
+    if (!r.ok || !d.ok) throw new Error(d.detail || '保存失败')
+    notice('✓ 正式会议纪要已保存到 WIKI')
+  } catch (e) { notice(e.message, 'error') }
+}
+async function askWiki(taskDir, token) {
+  if (!taskDir || wikiPrompts.has(token)) return
+  const dir = taskDir.split('/').filter(Boolean).pop()
+  wikiPrompts.add(token)
+  const r = await fetch(API + '/task?dir=' + encodeURIComponent(dir))
+  if (!r.ok) return
+  const task = await r.json()
+  if (!task.minutes || !task.minutes.trim()) return
+  let hash = 2166136261
+  for (const ch of task.minutes) hash = Math.imul(hash ^ ch.charCodeAt(0), 16777619)
+  const key = 'meeting.wikiPrompt.' + dir + '.' + (hash >>> 0)
+  if (localStorage.getItem(key)) return
+  localStorage.setItem(key, '1')
+  if (confirm('正式会议纪要已生成。是否保存到 WIKI？\n选择取消后，仍可在历史会议管理中保存。')) await saveWiki(dir)
+}
+
 async function poll() {
   try {
     const r = await fetch(API + '/state')
     const d = await r.json()
     state = { ...state, ...d }
     renderStatus()
+    if (d.last_delivery?.has_minutes) await askWiki(d.last_delivery.task_dir, d.last_delivery.time)
     // 后台任务（2026-09-13 起 stop/regen 异步）：完成时提示一次并刷新历史列表
     const job = d.job
     if (job && job.finished_at && job.finished_at !== lastJobFinished) {
@@ -669,6 +695,7 @@ async function poll() {
       if (job.ok) {
         notice(job.kind === 'stop' ? '✓ 纪要已生成，产物已交付！' : '✓ 纪要已重新生成！')
         pollTasks()
+        await askWiki(job.result?.task_dir, String(job.finished_at))
       } else {
         notice('整理失败：' + (job.error || '未知错误'), 'error')
       }
@@ -735,7 +762,7 @@ $('btnResume').onclick = async () => {
 }
 
 $('btnStop').onclick = async () => {
-  if (!confirm('结束会议？将自动整理流水、生成正式纪要并交付（Obsidian + WIKI）。')) return
+  if (!confirm('结束会议？将自动整理流水、生成正式纪要并保存在本地；生成后询问是否保存到 WIKI。')) return
   const title = $('titleInput').value.trim()
   const attendees = $('attendeesInput').value.trim()
   const location = $('locationInput').value.trim()
@@ -1073,7 +1100,9 @@ $('btnImport').onclick = async () => {
         extra: $('importExtra').value.trim()
       }) })
     if (!r.ok) { const d = await r.json().catch(()=>({})); throw new Error(d.detail || '导入失败') }
+    const result = await r.json()
     notice('正式纪要已生成并归档 ✓')
+    await askWiki(result.task_dir, 'import-' + result.task_dir + '-' + Date.now())
     pollTasks()
     $('importFile').value = ''
     $('importExtra').value = ''
@@ -1142,6 +1171,7 @@ async function recoverBroken(dir) {
     const d = await r.json()
     if (!d.ok) throw new Error(d.detail || '归档失败')
     notice(d.msg || '已归档 ✓')
+    await askWiki(dir, 'recover-' + dir + '-' + Date.now())
     pollBroken(); pollTasks()
   } catch (e) { notice(e.message, 'error') }
 }
@@ -1186,6 +1216,7 @@ function renderTasks(tasks) {
       btns = `<button onclick="openTask('${escapeAttr(t.dir)}','会议记录-清洗稿.md')">📜 流水记录</button>
               <button onclick="openTask('${escapeAttr(t.dir)}','会议纪要.md')">📄 会议纪要</button>`
     }
+    if ((t.files || []).includes('会议纪要.md')) btns += `<button onclick="saveWiki('${escapeAttr(t.dir)}')">📚 保存到 WIKI</button>`
     btns += `<button onclick="deleteTask('${escapeAttr(t.dir)}')" style="color:#dc2626">🗑 删除</button>`
     // 成功任务可点击展开详情；失败任务点击无详情（用按钮操作）
     const rowClick = failed ? '' : `onclick="toggleTaskDetail('${escapeAttr(t.dir)}')"`

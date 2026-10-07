@@ -463,7 +463,7 @@ class MeetingRecorder:
                 return None
             j = dict(self._job)
         j["result"] = None if not j.get("result") else {
-            "task_dir": j["result"].get("task_dir") if isinstance(j["result"], dict) else None}
+            "task_dir": (j["result"].get("task_dir") or j["result"].get("dir")) if isinstance(j["result"], dict) else None}
         return j
 
     def mark_processing(self):
@@ -1585,7 +1585,7 @@ class MeetingRecorder:
                     ex = export_all(minutes, title, task_dir=os.path.basename(self.task_dir))
                     self.files["obsidian"] = ex["obsidian"]
                     self.files["wiki"] = ex["wiki"]
-                    print(f"[engine] 已导出 Obsidian/WIKI", flush=True)
+                    print(f"[engine] 已本地归档；WIKI 等待用户确认", flush=True)
                 except Exception as e:
                     print(f"[engine] 导出失败(不阻断): {e}", flush=True)
             except Exception as e:

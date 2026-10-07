@@ -393,7 +393,7 @@ async def import_transcript(body: ImportBody):
 @router.post("/recover")
 async def recover_task(dir: str = ""):
     """R3: 中断任务一键恢复——把未收口任务（有流水/录音但无 metadata.json）走完整链路：
-    恢复句子 → L2校对 → 实体核验 → 生成纪要 → 收尾 → 导出双库。
+    恢复句子 → L2校对 → 实体核验 → 生成纪要 → 收尾 → 本地归档。
     不传 dir 时自动恢复所有可恢复任务（单目录机制 2026-08-27，兼容旧 tmp 路径）。"""
     rec = get_recorder()
     if rec.state != "idle":
@@ -454,7 +454,7 @@ async def recover_task(dir: str = ""):
             minutes_path.write_text(minutes, encoding="utf-8")
             rec.files["minutes"] = str(minutes_path)
             archived, topic = finalize_archive(str(d), minutes)
-            # 导出双库
+            # 本地归档
             try:
                 from export_minutes import export_all
                 export_all(minutes, title="", task_dir=os.path.basename(archived))
@@ -703,7 +703,7 @@ async def stop(body: StopBody, wait: int = 0):
 def _regen_minutes_impl(body: RegenBody):
     """补生成/重生成纪要的**同步实现**。
 
-    流程：读流水 → 重建句子 → 读补充信息 → L2 校对 → 材料解析 → LLM 生成 → 覆盖写回 → 双库导出。
+    流程：读流水 → 重建句子 → 读补充信息 → L2 校对 → 材料解析 → LLM 生成 → 覆盖写回 → 本地归档。
     由 `/api/regen_minutes` 调用：默认丢后台线程跑（立即返回），`?wait=1` 则同步等结果。
     """
     d = _safe_task_dir(body.dir)
@@ -792,13 +792,38 @@ def _regen_minutes_impl(body: RegenBody):
     out = d / "会议纪要.md"
     out.write_text(minutes, encoding="utf-8")
     extra = {}
-    try:   # 重写后同步覆盖 Obsidian + WIKI
+    try:   # 重写后仅本地归档；WIKI 等待用户确认
         from export_minutes import export_all
         ex = export_all(minutes, body.title, task_dir=os.path.basename(str(d)))
         extra = {"obsidian": ex["obsidian"], "wiki": ex["wiki"]}
     except Exception as e:
         extra = {"export_error": str(e)}
     return {"ok": True, "dir": body.dir, "model": model, "minutes": minutes, **extra}
+
+
+class WikiSaveBody(BaseModel):
+    dir: str
+
+
+@router.post("/save_wiki")
+async def save_wiki(body: WikiSaveBody):
+    """用户确认或历史按钮主动保存正式纪要；不导出流水、录音。"""
+    d = _safe_task_dir(body.dir)
+    minutes = d / "会议纪要.md"
+    if not minutes.is_file() or not minutes.read_text(encoding="utf-8").strip():
+        raise HTTPException(400, "该任务尚无正式会议纪要")
+    def save():
+        from export_minutes import export_to_wiki
+        date = datetime.datetime.strptime(d.name[:8], "%Y%m%d").date()
+        return export_to_wiki(minutes.read_text(encoding="utf-8"), date=date,
+                              task_dir=d.name, confirmed=True)
+    try:
+        path = await run_in_threadpool(save)
+        return {"ok": True, "wiki": path}
+    except FileExistsError as exc:
+        raise HTTPException(409, str(exc))
+    except Exception as exc:
+        raise HTTPException(500, str(exc))
 
 
 @router.post("/regen_minutes")

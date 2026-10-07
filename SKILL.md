@@ -100,7 +100,7 @@ metadata:
 - **产物落位（三层，2026-08-20 确认 + 2026-08-27 单目录机制）**：
   - **主存档**（唯一权威源）：`meeting/<YYYYMMDDNNN>/`（日期+当天序号，如 `20260827001`，dsh 单目录机制）——**开始会议即创建，全程使用**：录音中过程文件（pcm/流水/清洗稿/纠错清单/asr_stderr）与最终产物（流水.md + 清洗稿.md + 纠错清单.md + 存疑清单.md + 会议纪要.md + metadata.json + materials/）**同目录，结束不再搬家**；**pcm/wav/mp3 一律不留**：收口删、录音中断也删、服务启动扫掉遗留（2026-09-13 定稿，详见 `references/architecture-and-pipeline.md`）；主题（LLM 提取）写入 metadata.json 的 `topic` 字段供历史列表显示
   - **本地交付**：纪要与过程材料保存在 `meeting/<YYYYMMDDNNN>/` 主存档。
-  - **WIKI 同步**：默认关闭；只有用户明确要求或已有授权覆盖时，才以 `MEETING_ENABLE_WIKI_SYNC=1` 启用。`MEETING_KNOWLEDGE_BASE` 只指定目标位置，不构成写入授权；启用后仅同步正式纪要并追加日志。
+  - **WIKI 同步**：默认关闭；正式纪要生成后由页面弹窗询问；用户确认或点击历史会议“保存到 WIKI”后，通过 `POST /api/save_wiki` 保存。旧变量 `MEETING_ENABLE_WIKI_SYNC` 不再开启自动入库。`MEETING_KNOWLEDGE_BASE` 只指定目标位置，不构成写入授权；确认后仅保存正式纪要并通过专用工具追加日志。
   - **Obsidian**：默认不使用；仅在用户明确要求且显式配置目标时同步。
   - 流水、录音、清洗稿、纠错清单不写入 WIKI。
 
@@ -133,7 +133,7 @@ TENCENT_MEETING_TOKEN=$(grep TENCENT_MEETING_TOKEN ~/.codex/.env | cut -d= -f2-)
 - 2026-08-17 之前旧版 v1.0.8 的 search_records 查询有兼容问题（查不到记录），升级 v1.0.14 后正常
 
 **与会议记录员联动**（已实测）：
-1. 腾讯会议转写稿 → 保存为原始稿 → `POST /api/import {file, title, attendees, location}` → 全链路优化（L2 校对+实体核验+质量标准纪要+归档双库）
+1. 腾讯会议转写稿 → 保存为原始稿 → `POST /api/import {file, title, attendees, location}` → 全链路优化（L2 校对+实体核验+质量标准纪要+本地归档）
 2. 优化稿与官方智能纪要对比：我们的版本保留官方漏掉的关键决议（如"演示禁用真实企业名"合规要求）
 
 ### 一键后端能力（tx_meeting.py）
@@ -148,7 +148,7 @@ python3 tx_meeting.py --keyword 产品评审 --title "产品评审会" --attende
 # 或先列出:   python3 tx_meeting.py --list --days 30
 ```
 
-**历史链路记录**：search_records 找会议 → 拉转写 → 原始稿存 Downloads → `/api/import` 整理并输出纪要。执行时按用户当前指令决定是否启动服务及是否同步知识库；WIKI 同步默认关闭，需本轮授权并显式启用。Obsidian 同步默认关闭。
+**历史链路记录**：search_records 找会议 → 拉转写 → 原始稿存 Downloads → `/api/import` 整理并输出纪要。执行时按用户当前指令决定是否启动服务及是否同步知识库；WIKI 不自动同步，需在页面确认或点击历史会议按钮保存。Obsidian 同步默认关闭。
 
 **注意**：
 - 会议日期自动从腾讯会议元数据注入标题（三要素时间真实，避免"2025年X月X日"占位）
@@ -172,7 +172,7 @@ python3 tx_meeting.py --keyword 产品评审 --title "产品评审会" --attende
 ### 断点续传（出错任务找回）
 - `GET /api/broken_tasks`：列出未收口任务（有流水但无 metadata.json，单目录机制）
 - `POST /api/continue {dir}`：复用目录继续录音（**从当前时刻往后录**——中断的 pcm 已按"不留语音"删掉；已有流水/句子保留）
-- `POST /api/recover {dir?}`：中断任务直接归档（恢复句子→L2校对→纪要→双库导出）
+- `POST /api/recover {dir?}`：中断任务直接归档（恢复句子→L2校对→纪要→本地归档）
 - **前端历史管理合并**：成功任务（墨绿标签）→ 流水/纪要按钮；失败任务（暗红标签）→ 继续/归档按钮（2026-09-09：听录音按钮已删，与音频不保留策略配套）
 
 ### 已知坑
@@ -253,6 +253,7 @@ bash ~/.codex/skills/meeting-recorder/stop.sh
 | POST | `/api/pause` `/api/resume` `/api/stop` | 控制 |
 | GET | `/api/sentences` | 句子流 + 实时总结 |
 | GET | `/api/tasks` | 历史任务列表 |
+| POST | `/api/save_wiki` | `{dir}` 用户确认后保存正式纪要到 `~/wps/WIKI/meetings/`；相同内容重复点击不重复写入 |
 | GET | `/api/preview?dir&file` | 预览产物 md→html |
 | POST | `/api/regen_minutes` | 补生成/重生成会议纪要（读流水 → LLM → 覆盖写回） |
 
@@ -271,7 +272,7 @@ bash ~/.codex/skills/meeting-recorder/stop.sh
 `/api/stop` 与 `/api/regen_minutes` **默认异步**：
 
 - **立即返回** `{"ok": true, "async": true, "state": "processing", ...}`（实测 stop 响应 ~3ms）
-- 耗时的"停录→L2→实体核验→纪要→归档→双库导出"在**后台线程**跑（`engine.start_job()`）
+- 耗时的"停录→L2→实体核验→纪要→归档→本地归档"在**后台线程**跑（`engine.start_job()`）
 - 进度与结果看 `GET /api/state` 的 **`job`** 字段：`{kind, running, ok, error, started_at, finished_at}`
 - `?wait=1` 走旧的同步语义（请求等到结果再返回），脚本/调试可用
 
@@ -302,7 +303,7 @@ bash ~/.codex/skills/meeting-recorder/stop.sh
 | `MEETING_RECORDS_DIR` | `<技能目录>/records` | 产物根 |
 | `MEETING_SKIP_MINUTES` | — | 置 `1` 只转写不生成纪要（省 token，排查用） |
 | `MEETING_KNOWLEDGE_BASE` | 自动探测 | 仅指定 WIKI 目标；本身不授权写入 |
-| `MEETING_ENABLE_WIKI_SYNC` | 默认关闭 | 仅在授权后设为 `1` 才写 WIKI 并追加日志 |
+| `MEETING_ENABLE_WIKI_SYNC` | 默认关闭 | 已停用；不会开启自动入库，请使用页面确认或历史按钮 |
 | `MEETING_OBSIDIAN_INBOX` | 未配置 | 默认不写；仅按用户要求显式配置 |
 | `MEETING_VOCAB_PREFIX` | `meeting` | 百炼热词表前缀 |
 
@@ -337,21 +338,11 @@ bash ~/.codex/skills/meeting-recorder/stop.sh
   `references/*.local.md` 均在 `.gitignore` 中，不随仓库外发
 - 许可：**仅限个人非商业使用**，详见同目录 `LICENSE`
 
-### 测试演练纪律（2026-09-13 踩过，务必遵守）
+### 测试演练纪律
 
-**任何测试录音都会走完整链路，包括把纪要同步进真实知识库（`$MEETING_KNOWLEDGE_BASE/meetings/`）。**
-所以测试前**必须**把同步目标重定向到临时目录，跑完再删：
-
-```bash
-mkdir -p /tmp/mt-test/kb
-MEETING_KNOWLEDGE_BASE=/tmp/mt-test/kb bash start.sh
-# 测完：停服务 → 删测试任务目录 records/YYYYMMDDNNN → 删 /tmp/mt-test
-```
-
-实测事故：有一次重启服务时**漏了这个环境变量**，测试纪要直接写进了真实
-`WIKI/meetings/`，还往 `log.md` 追加了一条入库记录——两处都要手工回滚。
-**重启服务时务必确认 env 带上了**。事后核对方法：WIKI `meetings/` 文件数、
-`log.md` 行数是否与测试前一致。
+生成流程只落本地，不自动入库；测试不得对真实 WIKI 调用 `/api/save_wiki`。
+保存接口测试使用临时目录并模拟日志工具，验证确认保存、重复点击、冲突拒绝及日志失败回滚。
+正式保存目标为 `~/wps/WIKI/meetings/`，日志通过 `~/.codex/scripts/wiki_log_append.py` 预检后追加。
 
 
 ## 参考文档（按需读取，不要一次全读）

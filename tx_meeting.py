@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""腾讯会议集成后端能力：用户一句话 → 找到会议 → 拉转写 → 正式纪要 → 同步双库
+"""腾讯会议集成后端能力：用户一句话 → 找到会议 → 拉转写 → 正式纪要 → 本地归档
 
 用法：
   python3 tx_meeting.py --keyword 产品评审              # 按关键词找最近会议
@@ -10,7 +10,7 @@
 流程（全自动）：
   search_records → 找到会议 → 拉完整转写 → 存原始稿(Downloads) →
   调 /api/import 全链路优化（L2校对+实体核验+质量标准纪要）→
-  自动同步 WIKI meetings/ + Obsidian Inbox/
+  本地归档；WIKI 由页面确认或历史会议按钮保存
 """
 import argparse
 import json
@@ -256,7 +256,7 @@ def main():
         shutil.copy2(minutes_path, opt_path)
         print(f"✓ 优化稿已存: {opt_path}")
 
-    print("④ 已自动同步: WIKI meetings/ + Obsidian Inbox/（import 链路内完成）")
+    print("④ 已本地归档；如需保存到 WIKI，请在历史会议管理中点击“保存到 WIKI”")
     print("\n✅ 完成！检查: ")
     print(f"  原始转写: {raw_path}")
     print(f"  优化纪要: {opt_path}")

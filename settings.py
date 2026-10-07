@@ -23,7 +23,7 @@
 
 3. 可选集成（都没有就自动降级，不影响核心录音转写功能）
    $MEETING_KNOWLEDGE_BASE     知识库根（LLM-WIKI）
-   $MEETING_ENABLE_WIKI_SYNC   仅设为 1 时才将纪要写入 WIKI 并追加日志
+   $MEETING_ENABLE_WIKI_SYNC   已停用；WIKI 保存必须由页面确认或历史按钮触发
    $MEETING_OBSIDIAN_INBOX     显式配置后才同步到 Obsidian 收件箱
    $MEETING_HR_ETL             人事库重建脚本（默认用本目录自持的 hr_etl.py）
    $MEETING_EMPLOYER_ENTITIES  单位实体底稿（employer-entities.md）
@@ -136,8 +136,8 @@ def reload():
     _env_cache = None
 
 # ── 3. 可选集成 ───────────────────────────────────────────
-# 知识库根：默认 ~/WIKI，可用 $MEETING_KNOWLEDGE_BASE 指向任意目录
-WIKI_ROOT = Path.home() / "WIKI"
+# 知识库根：默认 ~/wps/WIKI，可用 $MEETING_KNOWLEDGE_BASE 指向任意目录
+WIKI_ROOT = Path.home() / "wps" / "WIKI"
 
 
 def _first_dir(cands):
@@ -159,7 +159,7 @@ def _first_file(cands):
 
 
 def knowledge_base():
-    """知识库根。显式变量优先（$MEETING_KNOWLEDGE_BASE），默认 ~/WIKI。"""
+    """知识库根。显式变量优先（$MEETING_KNOWLEDGE_BASE），默认 ~/wps/WIKI。"""
     explicit = os.environ.get("MEETING_KNOWLEDGE_BASE")
     if explicit:
         return _first_dir([explicit])

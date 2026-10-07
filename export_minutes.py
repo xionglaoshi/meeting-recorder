@@ -102,49 +102,71 @@ def export_to_obsidian(minutes_text, title="", date=None):
     return path
 
 
-def export_to_wiki(minutes_text, title="", date=None, task_dir=""):
-    """WIKI meetings/YYYY-MM-DD-<主题>-会议纪要.md + log.md 追加"""
-    if os.environ.get("MEETING_ENABLE_WIKI_SYNC") != "1":
-        print("[export] WIKI 同步未显式启用，纪要仅保存在本地 records/", flush=True)
+def export_to_wiki(minutes_text, title="", date=None, task_dir="", *, confirmed=False):
+    """仅由用户确认的保存动作调用；重复保存相同正文不重复写入。"""
+    if not confirmed:
         return None
+    from pathlib import Path
+    import subprocess
+    import tempfile
+    import yaml
     target = wiki_dir()
-    if not target:
-        print("[export] 未配置知识库目录，跳过 meetings/ 入库（纪要仍在 records/ 内）", flush=True)
-        return None
+    if not target or not Path(target).parent.is_dir():
+        raise RuntimeError("WIKI 目录不存在，请检查 MEETING_KNOWLEDGE_BASE")
+    # 专用日志工具固定服务于本机正式 WIKI，拒绝把正文与日志写到不同库。
+    if Path(target).parent.resolve() != settings.WIKI_ROOT.resolve():
+        raise RuntimeError("WIKI 保存目标须为 ~/wps/WIKI；请移除错误的 MEETING_KNOWLEDGE_BASE 覆盖")
+    if not minutes_text.strip():
+        raise ValueError("正式纪要为空")
     d = date or datetime.date.today()
     topic = _safe(title or extract_title(minutes_text))
-    # WIKI 命名规范：YYYY-MM-DD-<主题>-会议纪要.md；主题若已带"纪要"后缀先剥掉，避免重复
     base = re.sub(r"(会议)?纪要$", "", topic).strip() or topic
-    fname = f"{d.isoformat()}-{base}-会议纪要.md"
-    path = os.path.join(str(target), fname)
-    fm = (
-        f"---\ntitle: \"{topic}会议纪要\"\n"
-        f"created: \"{d.isoformat()}\"\nupdated: \"{d.isoformat()}\"\n"
-        f"type: \"report\"\naudience: \"unclassified\"\nstatus: \"active\"\n"
-        f"tags: \"[meeting, report]\"\n"
-        f"frontmatter_inferred_by: \"meeting-recorder\"\n---\n\n"
-    )
-    os.makedirs(str(target), exist_ok=True)
-    with open(path, "w", encoding="utf-8") as f:
-        f.write(fm + minutes_text.strip() + "\n")
-    # 更新知识库 log.md（可选）
+    target = Path(target)
+    target.mkdir(parents=True, exist_ok=True)
+    # 对同日同主题的既有页面先查重；不同正文不静默覆盖用户维护稿。
+    path = target / f"{d.isoformat()}-{base}-会议纪要.md"
+    body = minutes_text.strip() + "\n"
+    if path.exists():
+        old = path.read_text(encoding="utf-8")
+        old_body = old.split("---", 2)[-1].strip() if old.startswith("---\n") else old.strip()
+        if old_body == body.strip():
+            return str(path)
+        raise FileExistsError("WIKI 已有同日同主题纪要且内容不同，请先核对现有页面")
+    fm = yaml.safe_dump(dict(title=_with_suffix(topic), created=d.isoformat(),
+        updated=d.isoformat(), type="report", audience="unclassified", status="active",
+        tags=["meeting", "report"], sources=[str(Path(settings.RECORDS_DIR) / task_dir / "会议纪要.md")]),
+        allow_unicode=True, sort_keys=False)
+    content = "---\n" + fm + "---\n\n" + body
     now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
-    src = task_dir or f"{settings.RECORDS_DIR}/{d.strftime('%Y%m%d')}"
-    entry = (
-        f"\n#### [{now}] [meeting-recorder] {topic}会议纪要入库\n"
-        f"- source: 会议记录员语音转写（{src}）\n"
-        f"- action: 新建 `meetings/{fname}` + Obsidian Inbox 同步\n"
-        f"- detail: 语音转写→LLM纪要→自动导出双库\n"
-    )
-    log = wiki_log()
-    if log:
-        with open(str(log), "a", encoding="utf-8") as f:
-            f.write(entry)
-    return path
+    entry = (f"## [{now}] Codex：会议纪要确认入库\n\n"
+             f"- source: 用户在会议记录员中确认保存；任务 {task_dir}\n"
+             f"- action: 新建 [[meetings/{path.stem}]]\n"
+             "- verify: 正式纪要文件写后逐字读回一致\n"
+             f"- 来源：Codex · {datetime.date.today().isoformat()}\n")
+    script = Path.home() / ".codex/scripts/wiki_log_append.py"
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".md", encoding="utf-8") as tmp:
+        tmp.write(entry); tmp.flush()
+        cmd = [sys.executable, str(script), "--entry-file", tmp.name]
+        check = subprocess.run(cmd + ["--dry-run"], capture_output=True, text=True)
+        if check.returncode:
+            raise RuntimeError("WIKI 日志预检失败：" + check.stderr + check.stdout)
+        # 排他创建避免并发覆盖；日志失败回滚本次新建正文。
+        with path.open("x", encoding="utf-8") as out:
+            out.write(content)
+        try:
+            if path.read_text(encoding="utf-8") != content:
+                raise RuntimeError("WIKI 写后校验失败")
+            logged = subprocess.run(cmd, capture_output=True, text=True)
+            if logged.returncode:
+                raise RuntimeError("WIKI 日志写入失败：" + logged.stderr + logged.stdout)
+        except Exception:
+            path.unlink()
+            raise
+    return str(path)
 
 
 def export_all(minutes_text, title="", date=None, task_dir=""):
-    """导出到已配置目标；WIKI 仅在 MEETING_ENABLE_WIKI_SYNC=1 时写入。"""
+    """生成流程仅保存本地及已配置 Obsidian；WIKI 由确认接口单独保存。"""
     ob = export_to_obsidian(minutes_text, title, date)
-    wk = export_to_wiki(minutes_text, title, date, task_dir)
+    wk = None  # 生成流程只落本地，环境变量也不能开启自动入库
     return {"obsidian": ob, "wiki": wk}
